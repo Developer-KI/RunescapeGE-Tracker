@@ -11,7 +11,7 @@ def target_time_features(y: pd.DataFrame, feature_col: str, time_feature: int = 
         data[f'lag{t}'] = data[feature_col].shift(t)
     return data
 
-def rolling_classification(features:pd.DataFrame, window:int, diffpercent: float):
+def rolling_threshold_classification(features:pd.DataFrame, window:int, diffpercent: float):
     rolling_mean = features.rolling(window).mean()
     shifted_mean = features.shift(window)
     upper_threshold = shifted_mean * (1 + diffpercent / 100)
