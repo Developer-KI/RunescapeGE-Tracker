@@ -11,19 +11,28 @@ def target_time_features(y: pd.DataFrame, feature_col: str, time_feature: int = 
         data[f'lag{t}'] = data[feature_col].shift(t)
     return data
 
-def rolling_threshold_classification(features:pd.DataFrame, window:int, diffpercent: float):
-    rolling_mean = features.rolling(window).mean()
-    shifted_mean = features.shift(window)
-    upper_threshold = shifted_mean * (1 + diffpercent / 100)
-    lower_threshold = shifted_mean * (1 - diffpercent / 100)
+def rolling_threshold_classification(features:pd.DataFrame, window:int, diffpercent: float): 
+    mean_values = []
+    newfeatures= features.copy()
+    for i in range(0, features.shape[0], window):
+            end = min(i + window, features.shape[0])  # Handle end boundary
+            rolling_mean = newfeatures.iloc[i:end, :].mean()  # Compute mean for the chunk
+            newfeatures.iloc[i:end, :] = rolling_mean  # Assign the rolling mean to the original DataFrame
+            mean_values.append(pd.DataFrame(rolling_mean).T)  # Convert to DataFrame before appending
+
+    upper_threshold = features * (1 + diffpercent / 100)
+    lower_threshold = features * (1 - diffpercent / 100)
 
     booleandf = np.select([
-        rolling_mean > upper_threshold,
-        rolling_mean < lower_threshold
-    ], [2, 0], default=1)
+        newfeatures > upper_threshold,
+        newfeatures < lower_threshold
+        ], [2, 0], default=1)
 
-    booleandf_out = pd.DataFrame(booleandf, columns=features.columns)
+    booleandf_out = pd.DataFrame(booleandf, columns=newfeatures.columns)
     return booleandf_out
+  
+#abc = pd.DataFrame(np.random.randint(0, 100, size=(100, 5)), columns=list('ABCDE'))
+#meow = rolling_threshold_classification(abc, 10, 14)
 
 def target_rolling_features(y: pd.DataFrame, feature_col: str, window: int = 2) -> pd.DataFrame:
     data = y.copy()

@@ -1,13 +1,13 @@
-# %%
-#Script Init
+# %% Script Init
 import pandas as pd
 import numpy as np
 import DataPipeline as pipeline
 import ModelTools as tools
 import Models.RFTS as my_models
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 
-# %%
-# Aggregate features for model
+# %% Aggregate features for model
 price_data = pipeline.data_preprocess(read=False, interp_method='nearest')
 price_matrix_items = price_data.pivot(index="timestamp", columns="item_id", values="wprice")
 vol_matrix_items = price_data.pivot(index="timestamp", columns="item_id", values="totalvol")
@@ -24,10 +24,10 @@ reg_data = pd.concat([price_items_reg, vol_items_reg, volatility_index], axis=1)
 df_time = tools.target_time_features(reg_data, f'{target_item}', 5)
 df_roll = tools.target_rolling_features(reg_data, f'{target_item}', 10)
 df = pd.merge(df_time, df_roll, on='timestamp', how='inner').dropna()
-# %%
-#Run the RFTS model
+
+# %% Run the RFTS model
 model, test_idx = my_models.RFTS(data=df, target_col=f'{target_item}', estimators=200)
-# %%
+
 #Plot RFTS predictions vs realized price
 X = df.drop(f'{target_item}', axis=1)
 Y = df[f'{target_item}']
@@ -37,10 +37,10 @@ tools.plot_pred_vs_price(Y.iloc[test_idx[:100]], X.iloc[test_idx[:100]], model=m
 from hmmlearn.hmm import MultinomialHMM
 #Paramters for price differences governing regime change
 #Window must be >0, 1= no window
-window = 100
+window = 15
 diffpercent = 0.1
-booleandf = tools.rolling_threshold_classification(price_matrix_items,100,0.1)
-item=2
+booleandf = tools.rolling_threshold_classification(price_matrix_items,150,0.3)
+item=207
 
 from sklearn.preprocessing import OneHotEncoder
 
@@ -72,14 +72,11 @@ bic = num_parameters * np.log(X.shape[0]) - 2 * log_likelihood
 print(f"AIC: {aic}, BIC: {bic}")
 
 
-import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-#%%
 
 tools.plot_classification_vs_price(price_matrix_items,X_encoded,item,HMMmodel)
 #%%
 scores=[]
-total_iter= 
+total_iter= 100
 for i in range(1,total_iter):
     # tempAIC=[]
     # tempBIC=[]  
@@ -125,4 +122,4 @@ plt.xticks(rotation=45)
 plt.grid()
 
 plt.show()
-
+#%%
