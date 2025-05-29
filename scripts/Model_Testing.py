@@ -65,7 +65,11 @@ print(f"AIC: {aic}, BIC: {bic}")
 tools.plot_classification_vs_price(price_matrix_items,X_encoded,item,HMMmodel)
 #%%
 scores=[]
+<<<<<<< Updated upstream
 total_iter= 100
+=======
+total_iter= 10
+>>>>>>> Stashed changes
 for i in range(1,total_iter):
     # tempAIC=[]
     # tempBIC=[]  
