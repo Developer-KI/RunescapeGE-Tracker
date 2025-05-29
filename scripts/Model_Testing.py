@@ -3,10 +3,10 @@ import pandas as pd
 import numpy as np
 import DataPipeline as pipeline
 import ModelTools as tools
-import Models.RFTS as my_models
+import Models.RFTS as myRFTS
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
-
+import Models.HMM as myHMM
 # %% Aggregate features for model
 price_data = pipeline.data_preprocess(read=False, interp_method='nearest')
 price_matrix_items = price_data.pivot(index="timestamp", columns="item_id", values="wprice")
@@ -26,7 +26,7 @@ df_roll = tools.target_rolling_features(reg_data, f'{target_item}', 10)
 df = pd.merge(df_time, df_roll, on='timestamp', how='inner').dropna()
 
 # %% Run the RFTS model
-model, test_idx = my_models.RFTS(data=df, target_col=f'{target_item}', estimators=200)
+model, test_idx = myRFTS.RFTS(data=df, target_col=f'{target_item}', estimators=200)
 
 #Plot RFTS predictions vs realized price
 X = df.drop(f'{target_item}', axis=1)
@@ -34,15 +34,13 @@ Y = df[f'{target_item}']
 
 tools.plot_pred_vs_price(Y.iloc[test_idx[:100]], X.iloc[test_idx[:100]], model=model)
 # %%
-from hmmlearn.hmm import MultinomialHMM
-#Paramters for price differences governing regime change
-#Window must be >0, 1= no window
-window = 15
-diffpercent = 0.1
-booleandf = tools.rolling_threshold_classification(price_matrix_items,150,0.3)
-item=207
+myHMM.ItemThresholdHMM(price_matrix_items,207)
+#%%
 
+from hmmlearn.hmm import MultinomialHMM
 from sklearn.preprocessing import OneHotEncoder
+booleandf = tools.rolling_threshold_classification(price_matrix_items,100,0.1)
+item=207
 
 X=booleandf[item].values.reshape(-1,1)
 X[0,0]=2
@@ -50,13 +48,7 @@ n_components=len(np.unique(X))
 encoder = OneHotEncoder(sparse_output=False, categories='auto')
 X_encoded = encoder.fit_transform(X).astype(int)  # Shape will now be (2499, 3)
 
-
-
 iter = 198
-#startprob = np.array([.17,.66,.17]) #reasonable to keep up/down always less than sideways
-#transprob = np.array([[.17,.66,.17],[.17,.66,.17],[.17,.66,.17]])
-#emissionprob = np.array([[.17,.66,.17],[.17,.66,.17],[.17,.66,.17]])
-#HMMmodel = MultinomialHMM(n_components=n_components, startprob_prior=startprob, transmat_prior=transprob, n_iter=iter) #leave init_params empty to self-select probabilities
 HMMmodel = MultinomialHMM(n_components=n_components, n_iter=iter) #leave init_params empty to self-select probabilities
 #HMMmodel.emissionprob_ = np.array(emissionprob)
 HMMmodel.fit(X_encoded)
@@ -70,9 +62,6 @@ aic = 2 * num_parameters - 2 * log_likelihood
 bic = num_parameters * np.log(X.shape[0]) - 2 * log_likelihood
 
 print(f"AIC: {aic}, BIC: {bic}")
-
-
-
 tools.plot_classification_vs_price(price_matrix_items,X_encoded,item,HMMmodel)
 #%%
 scores=[]
@@ -123,3 +112,7 @@ plt.grid()
 
 plt.show()
 #%%
+
+abc = pd.DataFrame(np.random.uniform(0, 100, size=(100, 6)), columns=list('ABCDEF'))
+meow = tools.rolling_threshold_classification(abc, 10, 14)
+print(meow)
