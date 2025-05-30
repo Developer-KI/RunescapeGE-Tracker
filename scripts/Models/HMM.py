@@ -1,10 +1,10 @@
 #%%
 import pandas as pd
-import numpy as np
+from numpy import unique, log
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 from hmmlearn.hmm import MultinomialHMM
-import ModelTools as tools
+from ModelTools import plot_classification_vs_price, rolling_threshold_classification
 from sklearn.preprocessing import OneHotEncoder
 
 def ItemThresholdHMM(features,item,iter=100,window=100,diffpercent=0.1, selfselect:pd.array= None):
@@ -16,11 +16,11 @@ def ItemThresholdHMM(features,item,iter=100,window=100,diffpercent=0.1, selfsele
     n_samples= features.shape[0]
     n_components= features.shape[1]
 
-    booleandf = tools.rolling_threshold_classification(features,window,diffpercent)
+    booleandf = rolling_threshold_classification(features,window,diffpercent)
 
     X=booleandf[item].values.reshape(-1,1)
     X[0,0]=2
-    n_components=len(np.unique(X))
+    n_components=len(unique(X))
     encoder = OneHotEncoder(sparse_output=False, categories='auto')
     X_encoded = encoder.fit_transform(X).astype(int)  # Shape will now be (2499, 3)
 
@@ -34,10 +34,10 @@ def ItemThresholdHMM(features,item,iter=100,window=100,diffpercent=0.1, selfsele
         num_parameters = n_components**2 +(n_components*n_features) + n_components
         # Compute AIC & BIC
         aic = 2 * num_parameters - 2 * log_likelihood
-        bic = num_parameters * np.log(n_samples) - 2 * log_likelihood
+        bic = num_parameters * log(n_samples) - 2 * log_likelihood
         print(f"AIC: {aic}, BIC: {bic}")
 
-        tools.plot_classification_vs_price(features,X_encoded,item,HMMmodel)
+        plot_classification_vs_price(features,X_encoded,item,HMMmodel)
         return [aic,bic], HMMmodel
 
 #%%

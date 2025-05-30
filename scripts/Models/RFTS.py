@@ -1,5 +1,5 @@
 import pandas as pd
-import numpy as np
+from numpy import sqrt, mean, std
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error, mean_absolute_error
@@ -33,8 +33,8 @@ def RFTS(data: pd.DataFrame, target_col: str, splits: int = 5, estimators: int =
         cv_mae.append(model_mae)
     
     if output_model != None:
-        print(f"Cross-validated RMSE: {np.sqrt(np.mean(cv_mse)):.4f} (±{np.sqrt(np.std(cv_mse)):.4f})")
-        print(f"Cross-validated MAE: {np.sqrt(np.mean(cv_mae)):.4f} (±{np.sqrt(np.std(cv_mae)):.4f})")
+        print(f"Cross-validated RMSE: {sqrt(mean(cv_mse)):.4f} (±{sqrt(std(cv_mse)):.4f})")
+        print(f"Cross-validated MAE: {sqrt(mean(cv_mae)):.4f} (±{sqrt(std(cv_mae)):.4f})")
         return output_model
     else:
         raise Exception("Failed to choose model")
