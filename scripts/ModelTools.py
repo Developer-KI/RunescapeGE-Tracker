@@ -77,8 +77,8 @@ def plot_pred_vs_price(Y_test: pd.Series, X_test: pd.DataFrame, model) -> None:
     Y_pred = pd.Series(model.predict(X_test))
 
     plt.figure(figsize=(10, 5))
-    plt.plot(Y_test.index, Y_test.values, marker="o", markersize='2', linestyle="-")
-    plt.plot(Y_test.index, Y_pred.values, marker="o", markersize='1', linestyle="-")
+    plt.plot(Y_test.index, Y_test.values, marker="o", markersize='2', linestyle="-", label='Realized')
+    plt.plot(Y_test.index, Y_pred.values, marker="o", markersize='1', linestyle="-", label='Predicted')
     ax=plt.gca()
     ax.xaxis.set_major_formatter(mticker.ScalarFormatter(useMathText=True))
     ax.xaxis.get_major_formatter().set_scientific(False) 
@@ -89,12 +89,12 @@ def plot_pred_vs_price(Y_test: pd.Series, X_test: pd.DataFrame, model) -> None:
     plt.title("Predicted vs Realized Price")
     plt.xticks(rotation=45)
     plt.grid()
+    plt.legend()
 
     plt.show()
 
-def plot_classification_vs_price(hist_pricedata,features,item, model):
+def plot_classification_vs_price(hist_pricedata,hidden_states,item, model):
     timescale = hist_pricedata.index
-    hidden_states= model.predict(features)
 
     state_colors = {0: "red", 1: "gray", 2: "green"}
     fig, ax = plt.subplots()

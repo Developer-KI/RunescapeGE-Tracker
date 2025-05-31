@@ -37,32 +37,30 @@ tools.plot_pred_vs_price(Y.iloc[test_idx[:100]], X.iloc[test_idx[:100]], model=m
 myHMM.ItemThresholdHMM(price_matrix_items,207)
 #%%
 
-from hmmlearn.hmm import MultinomialHMM
-from sklearn.preprocessing import OneHotEncoder
 booleandf = tools.rolling_threshold_classification(price_matrix_items,100,0.1)
 item=207
 
 X=booleandf[item].values.reshape(-1,1)
 X[0,0]=2
 n_components=len(np.unique(X))
-encoder = OneHotEncoder(sparse_output=False, categories='auto')
-X_encoded = encoder.fit_transform(X).astype(int)  # Shape will now be (2499, 3)
+encoder = myHMM.OneHotEncoder(sparse_output=False, categories='auto')
+X_encoded = encoder.fit_transform(X).astype(int)[:,0:2]  # Shape will now be (2499, 2), excluded a dummy for reference
 
-iter = 198
-HMMmodel = MultinomialHMM(n_components=n_components, n_iter=iter) #leave init_params empty to self-select probabilities
+iter = 10000
+HMMmodel = myHMM.MultinomialHMM(n_components=n_components, n_iter=iter) #leave init_params empty to self-select probabilities
 #HMMmodel.emissionprob_ = np.array(emissionprob)
 HMMmodel.fit(X_encoded)
 hidden_states= HMMmodel.predict(X_encoded)
 
 log_likelihood = HMMmodel.score(X_encoded)
 # Estimate number of parameters
-num_parameters = n_components**2 +(n_components*X_encoded.shape[1]) + n_components
+num_parameters = n_components**2 +(n_components*X.shape[1]) + n_components
 # Compute AIC & BIC
 aic = 2 * num_parameters - 2 * log_likelihood
 bic = num_parameters * np.log(X.shape[0]) - 2 * log_likelihood
 
 print(f"AIC: {aic}, BIC: {bic}")
-tools.plot_classification_vs_price(price_matrix_items,X_encoded,item,HMMmodel)
+tools.plot_classification_vs_price(price_matrix_items,hidden_states,item,HMMmodel)
 #%%
 scores=[]
 total_iter= 100
@@ -70,7 +68,7 @@ for i in range(1,total_iter):
     # tempAIC=[]
     # tempBIC=[]  
     for j in range(2,6):
-        HMMmodel = MultinomialHMM(n_components=n_components, n_iter=i) #leave init_params empty to self-select probabilities
+        HMMmodel = myHMM.MultinomialHMM(n_components=n_components, n_iter=i) #leave init_params empty to self-select probabilities
         HMMmodel.fit(X_encoded)
         hidden_states= HMMmodel.predict(X_encoded)
         log_likelihood = HMMmodel.score(X_encoded)

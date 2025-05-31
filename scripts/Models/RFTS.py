@@ -1,5 +1,5 @@
 import pandas as pd
-from numpy import sqrt, mean, std
+from numpy import sqrt, mean, std 
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error, mean_absolute_error
@@ -26,7 +26,7 @@ def RFTS(data: pd.DataFrame, target_col: str, splits: int = 5, estimators: int =
         model_mae = mean_absolute_error(y_test_cv, preds_cv)
         
         
-        if model_mse < min(cv_mse, default=np.inf):
+        if model_mse < min(cv_mse, default=float('inf')):
             output_model = (model_cv, test_idx)
 
         cv_mse.append(model_mse)
