@@ -114,3 +114,10 @@ plt.show()
 abc = pd.DataFrame(np.random.uniform(0, 100, size=(100, 6)), columns=list('ABCDEF'))
 meow = tools.rolling_threshold_classification(abc, 10, 14)
 print(meow)
+#%%
+out = myRFTS.RFTSOptim(df,target_col=f'{target_item}',time_splits=5,n_trials=10)
+#%%
+#somemodel, test_idx = myRFTS.RFTS(data=df, target_col=f'{target_item}',max_features='log2', min_samples_split=7, n_estimators=34)
+#depths = [tree.get_depth() for tree in somemodel.estimators_]
+#print(f"Average depth: {sum(depths) / len(depths):.2f}")
+#print(f"Max depth: {max(depths)}, Min depth: {min(depths)}")
