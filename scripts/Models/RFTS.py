@@ -93,7 +93,7 @@ def RFTSOptim(data:pd.DataFrame,target_col:str,n_trials:int=30)-> dict:
         print(f"RMSE: {sqrt(trial.values[0]):.3f}, Std Dev: {sqrt(trial.values[1]):.3f}\nParams: {trial.params}")
     print("-----------------------------------------------------------------------------------------")
 
-    return {"Best Model": best_model, "Best Params": best_params, 'Indices': best_test_idx}
+    return {"Best Model": best_model, "Best Params": best_params}, best_test_idx
 
 
 

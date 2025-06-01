@@ -7,7 +7,7 @@ from hmmlearn.hmm import MultinomialHMM
 from ModelTools import plot_classification_vs_price, rolling_threshold_classification
 from sklearn.preprocessing import OneHotEncoder
 #%%
-def ItemThresholdHMM(features,item,iter=100,window=100,diffpercent=0.1, selfselect:pd.array= None):
+def ItemThresholdHMM(features,item,iter=1000,window=100,diffpercent=0.1, selfselect:pd.array= None):
 #self-select not implemented
 #Paramters for price differences governing regime change
 #Window must be >0, 1= no window
@@ -23,7 +23,6 @@ def ItemThresholdHMM(features,item,iter=100,window=100,diffpercent=0.1, selfsele
     n_components=len(unique(X))
     encoder = OneHotEncoder(sparse_output=False, categories='auto')
     X_encoded = encoder.fit_transform(X).astype(int)[:,0:2]  # Shape will now be (2499, 3)
-
     if selfselect==None:
         HMMmodel = MultinomialHMM(n_components=n_components, n_iter=iter) #leave init_params empty to self-select probabilities
         HMMmodel.fit(X_encoded)
@@ -36,8 +35,7 @@ def ItemThresholdHMM(features,item,iter=100,window=100,diffpercent=0.1, selfsele
         aic = 2 * num_parameters - 2 * log_likelihood
         bic = num_parameters * log(n_samples) - 2 * log_likelihood
         print(f"AIC: {aic}, BIC: {bic}")
-
-        plot_classification_vs_price(features,X_encoded,item,HMMmodel)
+        plot_classification_vs_price(features,hidden_states,item,HMMmodel)
         return [aic,bic], HMMmodel
 
 #%%
