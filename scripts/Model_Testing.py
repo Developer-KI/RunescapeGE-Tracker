@@ -23,24 +23,9 @@ reg_data = pd.concat([price_items_reg, vol_items_reg, volatility_index], axis=1)
 df_time = tools.target_time_features(reg_data, f'{target_item}', 10) 
 df_roll = tools.target_rolling_features(reg_data, f'{target_item}', 20) #LEAKY
 df = pd.merge(df_time, df_roll, on='timestamp', how='inner').dropna()
-df_mod=df[['12934','lag1','lag2','lag3','lag4']]
-# %% Run the RFTS model
-model, test_idx = myRFTS.RFTS(data=df_mod, target_col=f'{target_item}', n_estimators=200,time_splits=30)
-
-#Plot RFTS predictions vs realized price
-X = df_mod.drop(f'{target_item}', axis=1)
-Y = df_mod[f'{target_item}']
-
-tools.plot_pred_vs_price(Y.iloc[test_idx[:100]], X.iloc[test_idx[:100]], model=model)
-#%%
-myHMM.ItemThresholdHMM(price_matrix_items,207)
-#%%
-abc = pd.DataFrame(np.random.uniform(0, 100, size=(100, 6)), columns=list('ABCDEF'))
-meow = tools.rolling_threshold_classification(abc, 10, 14)
-print(meow)
-#%%
+df_mod=df[['12934','lag1','lag2','lag3','lag4']] #Make sure target is always the first column
+#%% Run the optimized RFTS
 newoptim, best_test_idx = myRFTS.RFTSOptim(df_mod,target_col=f'{target_item}',n_trials=5)
-#%%
-Xoptim = df_mod.drop(f'{target_item}', axis=1)
-Yoptim = df_mod[f'{target_item}']
-tools.plot_pred_vs_price(Yoptim.iloc[best_test_idx[:100]], Xoptim.iloc[best_test_idx[:100]], model=newoptim['Best Model'])
+tools.plot_pred_vs_price(df_mod, model=newoptim['Best Model'],index=best_test_idx,lookback=100)
+#%% Run the HMM model
+myHMM.ItemThresholdHMM(price_matrix_items,207)

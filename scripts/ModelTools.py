@@ -73,12 +73,15 @@ def plot_historical_alch_vs_price(item_id: int) -> None:
     else: 
         raise Exception("Invalid ID")
 
-def plot_pred_vs_price(Y_test: pd.Series, X_test: pd.DataFrame, model) -> None:
-    Y_pred = pd.Series(model.predict(X_test))
-
+def plot_pred_vs_price(data: pd.DataFrame, model, index, lookback:int=100) -> None:
+    X = data.drop(data.columns[0], axis=1)
+    Y = data[data.columns[0]]
+    X = X.iloc[index[:lookback]]
+    Y = Y.iloc[index[:lookback]] 
+    Y_pred = pd.Series(model.predict(X))
     plt.figure(figsize=(10, 5))
-    plt.plot(Y_test.index, Y_test.values, marker="o", markersize='2', linestyle="-", label='Realized')
-    plt.plot(Y_test.index, Y_pred.values, marker="o", markersize='1', linestyle="-", label='Predicted')
+    plt.plot(index, Y.values, marker="o", markersize='2', linestyle="-", label='Realized')
+    plt.plot(index, Y_pred.values, marker="o", markersize='1', linestyle="-", label='Predicted')
     ax=plt.gca()
     ax.xaxis.set_major_formatter(mticker.ScalarFormatter(useMathText=True))
     ax.xaxis.get_major_formatter().set_scientific(False) 
@@ -102,14 +105,13 @@ def plot_classification_vs_price(hist_pricedata,hidden_states,item, model):
     for t in range(1,len(timescale)-1):
         ax.axvspan(timescale[t], timescale[t + 1], color=state_colors[hidden_states[t]], alpha=0.07)
 
-    ax.plot(timescale, hist_pricedata[item], label="Price Data")
+    ax.plot(timescale, hist_pricedata[item])
     ax.yaxis.set_major_formatter(mticker.ScalarFormatter(useMathText=True))
     ax.yaxis.get_major_formatter().set_scientific(False)
     ax.ticklabel_format(useOffset=False) 
 
     ax.set_xlabel("Time")
     ax.set_ylabel("Price")
-    ax.legend()
     plt.xticks(rotation=45)
     plt.grid()
 
