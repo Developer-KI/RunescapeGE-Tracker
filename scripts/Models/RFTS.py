@@ -43,12 +43,15 @@ def RFTS(data:pd.DataFrame,target_col:str,time_splits:int=5,min_samples_leaf:int
     else:
         raise Exception("Failed to choose model")
     
-def RFTSOptim(data:pd.DataFrame,target_col:str,time_splits:int=5,n_trials:int=30)-> dict:
+def RFTSOptim(data:pd.DataFrame,target_col:str,n_trials:int=30)-> dict:
     X = data.drop(target_col, axis=1)
     Y = data[target_col]
-    tscv = TimeSeriesSplit(n_splits=time_splits)
+
     def objective(trial):
+        tscv = TimeSeriesSplit(n_splits=trial.suggest_int('n_TSsplits',2,50))
         mse_scores = []
+        best_mse=float('inf')
+        best_test_idx=None
         for train_idx, test_idx in tscv.split(X):
             
             X_train_cv, X_test_cv = X.iloc[train_idx], X.iloc[test_idx]
@@ -65,25 +68,33 @@ def RFTSOptim(data:pd.DataFrame,target_col:str,time_splits:int=5,n_trials:int=30
 
             model.fit(X_train_cv, y_train_cv)
             preds_cv = model.predict(X_test_cv)
-            mse_scores.append(mean_squared_error(y_test_cv, preds_cv))
+            mse = mean_squared_error(y_test_cv, preds_cv)
+            mse_scores.append(mse)
 
-        return mean(mse_scores), std(mse_scores)  # Optimize on average MSE across splits
+            if mse < best_mse:
+                best_mse = mse
+                best_test_idx=test_idx
+        trial.set_user_attr("best_test_idx", best_test_idx)
+        return mean(mse_scores), std(mse_scores) # Optimize on average MSE across splits
         # or try weighted single combination mean_mse + x*var_mse
     
     study = optuna.create_study(directions=["minimize",'minimize'], sampler=optuna.samplers.TPESampler())
     study.optimize(objective, n_trials=n_trials)
 
     # Select first Pareto-optimal trial to train final model
-    best_params = study.best_trials[0].params
+    best_params = study.best_trials[0].params.copy()
+    best_n_TSsplits=best_params.pop('n_TSsplits')
+    best_test_idx= study.best_trials[0].user_attrs.get("best_test_idx")
     best_model = RandomForestRegressor(**best_params, n_jobs=-1)
     best_model.fit(X, Y)
 
     print("------------------------Best Trials RMSE and Standard Deviation------------------------")
     for trial in study.best_trials:
-        print(f"RMSE: {trial.values[0]:.4f}, Std Dev: {trial.values[1]:.4f}\nParams: {trial.params}")
+        print(f"RMSE: {sqrt(trial.values[0]):.3f}, Std Dev: {sqrt(trial.values[1]):.3f}\nParams: {trial.params}")
     print("-----------------------------------------------------------------------------------------")
 
-    return {"Best Model": best_model, "Best Params": best_params}
+    return {"Best Model": best_model, "Best Params": best_params, 'Indices': best_test_idx}
+
 
 
 
