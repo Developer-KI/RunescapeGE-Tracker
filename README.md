@@ -6,13 +6,14 @@ https://runescape.wiki/w/RuneScape:Grand_Exchange_Market_Watch/Usage_and_APIs
 https://evidencebasedta.com/montedoc12.15.06.pdf
 https://github.com/thegregyang/LossUpAccUp
 https://medium.com/@silva.f.francis/avoiding-data-leakage-in-cross-validation-ba344d4d55c0
+https://www.robjhyndman.com/papers/mase.pdf
 
 -Factor models
 -PCA, correlating PCA factors with HMM states
 -HMM against indirect market data, raw prices too dynamic
 -Finish XGBoost
 -Implement Monte carlo permutations testing
-
+- Expanding window vs time series split
 -Mean reversion
 -Mean reversion of items against market index (thank you Clay the quant)
 -Pipelining market indexes
@@ -27,6 +28,7 @@ https://medium.com/@silva.f.francis/avoiding-data-leakage-in-cross-validation-ba
 -Explore technical indicators?
 -Research agnostic/uninformed markets, bot trading/activity
 -Examine timezone effects
+-Research forecasting error criteria
 
 
 

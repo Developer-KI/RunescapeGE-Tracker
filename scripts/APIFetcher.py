@@ -98,13 +98,13 @@ def fetch_historical_5m(n = 10, mins=5, waits=1.1, timestamp: int = 0) -> pd.Dat
 def writing_returns(filepath: str = "./data/data.csv", n: int = 100, p: int= 10, del_duplicates: bool = True) -> None:
     timestampt_start = int(datetime.now().timestamp())
     timestampt_start = timestampt_start - timestampt_start % 300
-    series_lenght = 0
+    series_length = 0
 
     with open("./data/data_properties.txt", "r") as file:
             lines = file.readlines()
     if lines != list():
         timestampt_start = int(lines[0].replace("\n", ""))
-        series_lenght = int(lines[1].replace("\n", ""))
+        series_length = int(lines[1].replace("\n", ""))
 
     print(f"Initialized process. Expected mining time: {round(n * p * 1.1 / 60, 3)} minutes")
     for t in range(0, p):
@@ -113,12 +113,12 @@ def writing_returns(filepath: str = "./data/data.csv", n: int = 100, p: int= 10,
         df_t = df_t[['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp']]
         df_t.to_csv(filepath, mode='a', header=False, index=False)
         if t + 1 == p:
-            series_lenght = series_lenght + n - 1
+            series_length = series_length + n - 1
         else:
-            series_lenght = series_lenght + n
+            series_length = series_length + n
         with open("./data/data_properties.txt", "w") as file:
             file.write(f"{last_call_timestamp}\n")
-            file.write(f"{series_lenght}\n")
+            file.write(f"{series_length}\n")
         print(f"{(t + 1) * n} queries added!")
     print("Success!")
     
@@ -240,4 +240,4 @@ def fetch_latest_idex_df():
     return df
 
 if __name__ == "__main__":
-    writing_returns(n=100, p=10, del_duplicates=True)
+    writing_returns(n=10, p=100, del_duplicates=True)

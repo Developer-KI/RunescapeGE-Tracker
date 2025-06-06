@@ -71,7 +71,9 @@ def volatility_market(market_data: pd.DataFrame, smoothing: int = 20) -> pd.Seri
     volatilitymarket = volatilitymarket/corr_price_market.shape[1]
 
     return pd.DataFrame(volatilitymarket, columns=['market_vix'])
-    
+
+if __name__ == "__main__":
+    test = data_preprocess(read=False, write=True)
 
 
 
