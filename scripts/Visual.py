@@ -65,7 +65,27 @@ ax.yaxis.get_major_formatter().set_scientific(False)
 
 plt.xlabel("Time")
 plt.ylabel("Volume of Market Trade")
-plt.title(fr"Volume of $\mathbf{{{volume_matrix_items.shape[1]}}}$ Most Traded Items")
+plt.title(fr"$\mathbf{{{round((price_volatility.shape[0]*5)/(60*24),1)}}}$ Day Market Volume of the $\mathbf{{{volume_matrix_items.shape[1]}}}$ Most Traded Items")
+
+
+plt.xticks(rotation=45)
+plt.grid()
+
+plt.show()
+#%%
+#item volatility 
+item = 536
+plt.figure(figsize=(10,5))
+plt.plot(pd.to_datetime(price_volatility.iloc[:].index, unit='s'), volume_matrix_items[item], marker="o", markersize='2', linestyle="-", label="Volume")
+
+ax=plt.gca()
+ax.yaxis.set_major_formatter(mticker.ScalarFormatter(useMathText=True))
+ax.yaxis.get_major_formatter().set_scientific(False) 
+
+
+plt.xlabel("Time")
+plt.ylabel("Volume of Market Trade")
+plt.title(fr"$\mathbf{{{round((price_volatility.shape[0]*5)/(60*24),1)}}}$ Day Market Volume of ID $\mathbf{{{item}}}$")
 
 
 plt.xticks(rotation=45)

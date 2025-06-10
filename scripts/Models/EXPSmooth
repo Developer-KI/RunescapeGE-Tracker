@@ -1,0 +1,10 @@
+import numpy as np
+import pandas as pd
+from statsmodels.tsa.api import SimpleExpSmoothing
+
+def EXPSmooth(data, predictions:int, holdout:int, initialization_method:str):
+    train=data.iloc[:holdout,0]
+    model = SimpleExpSmoothing(train, initialization_method=initialization_method)
+    fitted=model.fit()
+    forecast=fitted.forecast(predictions)
+    return model, forecast

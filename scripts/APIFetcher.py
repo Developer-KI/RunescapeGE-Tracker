@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 from datetime import datetime
 import time
-
+#%%
 headers = {
     'User-Agent': 'Price/Volume Tracker and Scraper- NoHFT',
     'From': 'mstavreff@outlook.com, discord: shrimpsalad'
@@ -95,8 +95,11 @@ def fetch_historical_5m(n = 10, mins=5, waits=1.1, timestamp: int = 0) -> pd.Dat
 
     return df[['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp']]
 
-def writing_returns(filepath: str = "./data/data.csv", n: int = 100, p: int= 10, del_duplicates: bool = True) -> None:
-    timestampt_start = int(datetime.now().timestamp())
+def writing_returns(filepath: str = "./data/data.csv", n: int = 100, p: int= 10, timestamp=None,del_duplicates: bool = True) -> None:
+    if timestamp is not None:
+        timestampt_start= timestamp
+    else: 
+        timestampt_start = int(datetime.now().timestamp())
     timestampt_start = timestampt_start - timestampt_start % 300
     series_length = 0
 
@@ -238,6 +241,7 @@ def fetch_latest_idex_df():
     df = df.reset_index()
     del df['index']
     return df
-
+#%%
 if __name__ == "__main__":
-    writing_returns(n=10, p=100, del_duplicates=True)
+    writing_returns(n=10, p=500, timestamp=1747701935,del_duplicates=False)
+#run as .py file
