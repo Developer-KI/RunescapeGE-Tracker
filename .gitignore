@@ -3,3 +3,5 @@
 *.pyc
 # Data files
 data/data.csv
+data/processed_data.csv
+data/data_properties.txt

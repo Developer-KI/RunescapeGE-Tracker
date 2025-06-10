@@ -31,8 +31,8 @@ https://www.robjhyndman.com/papers/mase.pdf
 -Research forecasting error criteria
 
 
-
-
+*assymetric MAE
+*alpha meta-tuning might cause overfit
 *Tons of feature engineering
 *Explore more data sources
 *Finish backtesting/trading system
