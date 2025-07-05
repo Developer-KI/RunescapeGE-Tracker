@@ -1,5 +1,5 @@
 import pandas as pd
-from numpy import sqrt, mean, std, nan, concatenate, nanmean, nanstd, isinf, isnan, float64, ravel, median
+import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error, mean_absolute_error
@@ -34,7 +34,7 @@ def RFTS(data:pd.DataFrame,target_col:str, holdout:int, outlier_threshold:float=
         y_train_cv, y_test_cv = Y[train_idx], Y[test_idx]
 
         if transform=='boxcox': #non-price spike pruning will cause integer overflows
-            y_train_cv=y_train_cv.astype(float64)
+            y_train_cv=y_train_cv.astype(np.float64)
             adf_count=0
             y_train_cv, _ = scistats.boxcox(y_train_cv)
             print(y_train_cv)
@@ -55,34 +55,31 @@ def RFTS(data:pd.DataFrame,target_col:str, holdout:int, outlier_threshold:float=
             last_actual_in_train_cv = y_train_cv[-1]
             
             # Combine for DA calculation
-            combined_actuals_cv_da = concatenate(([last_actual_in_train_cv], y_test_cv))
-            combined_preds_cv_da = concatenate(([last_actual_in_train_cv], preds_cv))
+            combined_actuals_cv_da = np.concatenate(([last_actual_in_train_cv], y_test_cv))
+            combined_preds_cv_da = np.concatenate(([last_actual_in_train_cv], preds_cv))
             
             model_da = tools.calculate_directional_accuracy(combined_actuals_cv_da, combined_preds_cv_da)
             cv_da.append(model_da)
         else:
-            cv_da.append(nan) # Append NaN if not enough data for DA
+            cv_da.append(np.nan) # Append NaN if not enough data for DA
 
         if model_mase < best_mase:
             best_mase = model_mase
             best_model = model_cv  
             
     if best_model is not None:
-        #outlier detection
-        window_size = 20 # Adjust based on your data frequency and spike duration
-        pct_change = full_Y.pct_change()
-        
-
-        median_absolute_deviation = lambda x: median(abs(x - median(x)))
-        mad_pct_change = pct_change.rolling(window=window_size).apply(median_absolute_deviation, raw=False)
-        # A 'modified z-score' based on MAD
-        modified_z_score = 0.6745 * (pct_change - pct_change.rolling(window=window_size).median()) / mad_pct_change
-        outliers=full_Y[modified_z_score>outlier_threshold]
-        print(f'Outliers Detected: {len(outliers)}\n--------------------------')
+        #outlier detection REWORK 
+        window_size = 20
+        epsilon = 1e-8
+        residuals = full_Y - best_model.predict(full_X.to_numpy(dtype='float32'))
+        mad_resid = residuals.rolling(window=window_size).apply(lambda x: np.median(abs(x - np.median(x))))
+        mod_z_resid = 0.6745 * (residuals - residuals.rolling(window=window_size).median()) / (mad_resid + epsilon) #hard-coded value why?
+        outliers = full_Y[abs(mod_z_resid) > outlier_threshold]
+        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
     
-        print(f"Cross-validated MASE: {mean(cv_mase):.4f} (±{std(cv_mase):.4f})")
-        print(f"Cross-validated MAE: {mean(cv_mae):.4f} (±{std(cv_mae):.4f})")
-        print(f"Cross-validated DA: {nanmean(cv_da):.2f}% (±{nanstd(cv_da):.2f})") # Use nanmean/nanstd to handle NaNs
+        print(f"Cross-validated MASE: {np.mean(cv_mase):.4f} (±{np.std(cv_mase):.4f})")
+        print(f"Cross-validated MAE: {np.mean(cv_mae):.4f} (±{np.std(cv_mae):.4f})")
+        print(f"Cross-validated DA: {np.nanmean(cv_da):.2f}% (±{np.nanstd(cv_da):.2f})") # Use nanmean/nanstd to handle NaNs
         if transform!= None:
             print(f"Aggregated Training Augmented Dickey-Fuller Rejection: {adf_count/time_splits}%")
 
@@ -111,8 +108,8 @@ def RFTS(data:pd.DataFrame,target_col:str, holdout:int, outlier_threshold:float=
             last_train_actual = full_Y.iloc[-holdout - 1] 
             
             # Combine last training actual with holdout actuals and predictions
-            combined_actuals_for_da = concatenate(([last_train_actual], Y_holdout))
-            combined_preds_for_da = concatenate(([last_train_actual], final_preds_holdout))
+            combined_actuals_for_da = np.concatenate(([last_train_actual], Y_holdout))
+            combined_preds_for_da = np.concatenate(([last_train_actual], final_preds_holdout))
             
             final_holdout_da = tools.calculate_directional_accuracy(combined_actuals_for_da, combined_preds_for_da)
 
@@ -127,8 +124,8 @@ def RFTS(data:pd.DataFrame,target_col:str, holdout:int, outlier_threshold:float=
                 X_next = full_X.iloc[-holdout:-holdout+1].to_numpy(dtype='float32') 
                 Y_next = full_Y.iloc[-holdout:-holdout+1].to_numpy(dtype='float32')
                 final_preds_recursive = best_model.predict(X_next)
-                X_next= concatenate(final_preds_recursive,X_next)
-                Y_next= concatenate(final_preds_recursive,Y_next)
+                X_next= np.concatenate(final_preds_recursive,X_next)
+                Y_next= np.concatenate(final_preds_recursive,Y_next)
     else:
         raise Exception("Failed to choose model")
     
@@ -172,7 +169,7 @@ def RFTSOptim(data:pd.DataFrame,target_col:str, holdout:int,n_trials:int=30,prun
                 best_test_idx=test_idx
         trial.set_user_attr("best_test_idx", best_test_idx)
         trial.set_user_attr("mase_scores", mase_scores)
-        return mean(mase_scores)*alpha+std(mase_scores)
+        return np.mean(mase_scores)*alpha+np.std(mase_scores)
     
     study = optuna.create_study(directions=["minimize"])
     study.optimize(objective, n_trials=n_trials, n_jobs=4) #check processor cores for parallelization 
@@ -190,7 +187,7 @@ def RFTSOptim(data:pd.DataFrame,target_col:str, holdout:int,n_trials:int=30,prun
 
     print("------------------------Best Trial MASE and Standard Deviation------------------------")
     for trial in study.best_trials:
-        print(f"MASE: {mean(trial.user_attrs['mase_scores'])} | Std Dev: {std(trial.user_attrs['mase_scores'])} | Ratio: {mean(trial.user_attrs['mase_scores'])/std(trial.user_attrs['mase_scores'])}")
+        print(f"MASE: {np.mean(trial.user_attrs['mase_scores'])} | Std Dev: {np.std(trial.user_attrs['mase_scores'])} | Ratio: {np.mean(trial.user_attrs['mase_scores'])/np.std(trial.user_attrs['mase_scores'])}")
         print(f'Weighted Score: {trial.values}\nParams: {trial.params}')
     print("-----------------------------------------------------------------------------------------")
 

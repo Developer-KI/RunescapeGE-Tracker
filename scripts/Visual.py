@@ -66,7 +66,6 @@ plt.plot(volatility.index,volatility)
 plt.xticks(rotation=45)
 plt.grid()
 plt.show()
-
 #%% Leverage Effect (Returns vs Volatility)
 plt.figure(figsize=(10,5))
 plt.title(fr'$\mathbf{{{tools.item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Volatility vs. $\mathbf{{{return_period}}}$-Period Lagged $\mathbf{{{lookback}}}$ Returns')

@@ -71,10 +71,10 @@ def XGB(data:pd.DataFrame,target_col:str, holdout:int, outlier_threshold:int=0.2
             best_model = model_cv  
             
     if best_model is not None:
-        #outlier detection
+        #outlier detection REWORK 
         z_score=(full_Y.pct_change()-full_Y.pct_change().mean())/full_Y.pct_change().std()
         outliers=full_Y[z_score>outlier_threshold]
-        print(f'Outliers Detected: {len(outliers)}\n--------------------------')
+        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
 
         print(f"Cross-validated MASE: {mean(cv_mase):.4f} (±{std(cv_mase):.4f})")
         print(f"Cross-validated MAE: {mean(cv_mae):.4f} (±{std(cv_mae):.4f})")

@@ -6,7 +6,13 @@ def data_preprocess2(read: bool, filepath: str = "../data", read_path: str = "..
    
     if read:
         try:
-            df = pd.read_csv(f'{read_path}', names=['timestamp', 'item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'totalvol', 'wprice'])
+            df = pd.read_csv(
+                f'{read_path}',
+                names=[
+                    'item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice',
+                    'lowPriceVolume', 'timestamp', 'totalvol', 'wprice'
+                ]
+            )
             print(f"Successfully loaded processed data from {read_path}")
             return df
         except FileNotFoundError:
@@ -131,7 +137,13 @@ def data_preprocess2(read: bool, filepath: str = "../data", read_path: str = "..
 def data_preprocess(read: bool, filepath: str = "../data", read_path: str = "../data/processed_data.csv", write: bool = False, interp_method: str = 'linear') -> pd.DataFrame:
     ### Read has higher priority than write
     if read:
-        df = pd.read_csv(f'{read_path}', names=['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp', 'totalvol', 'wprice'])
+        df = pd.read_csv(
+            f'{read_path}',
+            names=[
+                'item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice',
+                'lowPriceVolume', 'timestamp', 'totalvol', 'wprice'
+            ]
+        )
         return df
 
     #Load the data

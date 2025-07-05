@@ -216,13 +216,16 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.array, lookbac
     else:
             Y = data[data.columns[0]].to_numpy()
     item = data.columns[0]
-    print(min(Y)) 
     # Preserve original timestamps for plotting
     time_index = data.index.to_numpy()  
 
     # adj_index now represents the full time range for plotting, covering the 'lookback' period
     adj_index = time_index[-lookback:]
     
+    if lookback > data.shape[0]:
+        print(f"Warning: 'lookback' ({lookback}) is greater than dataset size ({data.shape[0]}). Adjusting lookback to max size for plotting consistency.")
+        lookback = data.shape[0]
+        adj_index = time_index
     # Ensure lookback is at least as large as holdout, otherwise adjust.
     if lookback < len(holdout_pred):
         print(f"Warning: 'lookback' ({lookback}) is less than 'holdout' ({len(holdout_pred)}). Adjusting lookback to holdout value for plotting consistency.")
@@ -242,7 +245,7 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.array, lookbac
     lower_bound = holdout_pred - std_factor * pred_std
     
     fig = plt.figure(figsize=(12, 10), constrained_layout=True) 
-    
+
     if not isinstance(model, SimpleExpSmoothing):
         X = data.drop(data.columns[0], axis=1).to_numpy()
 
@@ -272,8 +275,15 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.array, lookbac
         ax_main.plot(holdout_time_indices, holdout_pred, marker="o", markersize=2, linestyle="-", label="Predicted", color="red")
         ax_main.fill_between(holdout_time_indices, lower_bound, upper_bound, color="#5DD4FF39", alpha=0.3,
                                 label=f"{(stats.norm.cdf(std_factor) - stats.norm.cdf(-std_factor)) * 100:.2f}% Confidence Interval (Gaussian)")
-        ax_main.plot(adj_index[fill_outliers.reset_index().index], fill_outliers, 'X', color='red',
-                         markersize=8, markeredgecolor='black', label='Detected Outliers')
+        # Only plot outliers that are within the current plotting window
+        if fill_outliers is not None and not fill_outliers.empty:
+            # adj_index is your x-axis (timestamps), fill_outliers.index should be timestamps too
+            outlier_idx = np.intersect1d(adj_index, fill_outliers.index)
+            ax_main.plot(
+                outlier_idx,
+                fill_outliers.loc[outlier_idx],
+                'X', color='yellow', markersize=8, markeredgecolor='black', label='Detected Outliers'
+            )
         # **Row 2: Residuals Subplot (Full Width, with color change)**
         ax_residuals = fig.add_subplot(gs[1, 0], sharex=ax_main) 
         ax_residuals.plot(training_test_time_indices, residuals_training_test_percent, 
@@ -311,7 +321,7 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.array, lookbac
 
     #Main Plot
     ax_main.set_ylabel("GP Price")
-    ax_main.set_title(f"{item_name(item)} [{item}] Predicted vs. Actual Price")
+    ax_main.set_title(fr"$\mathbf{{{item_name(item)}}}$ [{item}] Predicted vs. Actual Price")
     ax_main.legend()
     ax_main.grid()
 
