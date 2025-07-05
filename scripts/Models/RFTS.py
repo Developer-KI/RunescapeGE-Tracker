@@ -1,5 +1,5 @@
 import pandas as pd
-from numpy import sqrt, mean, std, nan, concatenate, nanmean, nanstd, isinf, isnan, float64, ravel
+from numpy import sqrt, mean, std, nan, concatenate, nanmean, nanstd, isinf, isnan, float64, ravel, median
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_squared_error, mean_absolute_error
@@ -11,7 +11,7 @@ from statsmodels.tsa.stattools import adfuller
 
 warnings.simplefilter("error")
 
-def RFTS(data:pd.DataFrame,target_col:str, holdout:int, recursive:bool=False, transform=None, time_splits:int=5,min_samples_leaf:int=5,n_estimators:int=100,min_samples_split:int=5,max_features:str='sqrt',max_depth:int=10) -> RandomForestRegressor:
+def RFTS(data:pd.DataFrame,target_col:str, holdout:int, outlier_threshold:float=2, recursive:bool=False, transform=None, time_splits:int=5,min_samples_leaf:int=5,n_estimators:int=100,min_samples_split:int=5,max_features:str='sqrt',max_depth:int=10) -> RandomForestRegressor:
     #*** recursive unimplented***
     full_X = data.drop(target_col, axis=1)
     full_Y = data[target_col]
@@ -68,6 +68,18 @@ def RFTS(data:pd.DataFrame,target_col:str, holdout:int, recursive:bool=False, tr
             best_model = model_cv  
             
     if best_model is not None:
+        #outlier detection
+        window_size = 20 # Adjust based on your data frequency and spike duration
+        pct_change = full_Y.pct_change()
+        
+
+        median_absolute_deviation = lambda x: median(abs(x - median(x)))
+        mad_pct_change = pct_change.rolling(window=window_size).apply(median_absolute_deviation, raw=False)
+        # A 'modified z-score' based on MAD
+        modified_z_score = 0.6745 * (pct_change - pct_change.rolling(window=window_size).median()) / mad_pct_change
+        outliers=full_Y[modified_z_score>outlier_threshold]
+        print(f'Outliers Detected: {len(outliers)}\n--------------------------')
+    
         print(f"Cross-validated MASE: {mean(cv_mase):.4f} (±{std(cv_mase):.4f})")
         print(f"Cross-validated MAE: {mean(cv_mae):.4f} (±{std(cv_mae):.4f})")
         print(f"Cross-validated DA: {nanmean(cv_da):.2f}% (±{nanstd(cv_da):.2f})") # Use nanmean/nanstd to handle NaNs
@@ -103,12 +115,13 @@ def RFTS(data:pd.DataFrame,target_col:str, holdout:int, recursive:bool=False, tr
             combined_preds_for_da = concatenate(([last_train_actual], final_preds_holdout))
             
             final_holdout_da = tools.calculate_directional_accuracy(combined_actuals_for_da, combined_preds_for_da)
+
             print('--------------------------')
             print(f"Final Holdout MASE: {final_holdout_mase:.4f}")
             print(f"Final Holdout MAE: {final_holdout_mae:.4f}")
             print(f"Final Holdout Directional Accuracy: {final_holdout_da:.2f}%")
 
-            return best_model, final_preds_holdout
+            return best_model, final_preds_holdout, outliers
         else: #WORK IN PROGRESS ------------------
             for i in range(0,len(holdout)+1):
                 X_next = full_X.iloc[-holdout:-holdout+1].to_numpy(dtype='float32') 

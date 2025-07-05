@@ -208,9 +208,15 @@ def test_train_error(data, param:str, exclude_param:dict, model_class, param_ran
     plt.title(f"Train vs. Test Error ({param})")
     plt.show()
  
-def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.array, lookback: int = 0, std_factor: float = 1.96):
-    Y = data[data.columns[0]].to_numpy()
-    item = data.columns[0] 
+def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.array, lookback: int = 0, fill_outliers=None, std_factor: float = 1.96):
+    if fill_outliers is not None:
+        Y = data[data.columns[0]].copy()
+        Y.loc[fill_outliers.index] = np.nan
+        Y=Y.ffill().to_numpy()
+    else:
+            Y = data[data.columns[0]].to_numpy()
+    item = data.columns[0]
+    print(min(Y)) 
     # Preserve original timestamps for plotting
     time_index = data.index.to_numpy()  
 
@@ -234,7 +240,9 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.array, lookbac
     pred_std = np.std(holdout_pred)  
     upper_bound = holdout_pred + std_factor * pred_std
     lower_bound = holdout_pred - std_factor * pred_std
-
+    
+    fig = plt.figure(figsize=(12, 10), constrained_layout=True) 
+    
     if not isinstance(model, SimpleExpSmoothing):
         X = data.drop(data.columns[0], axis=1).to_numpy()
 
@@ -254,11 +262,6 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.array, lookbac
         residuals_holdout_for_plot = residuals_full_lookback[training_test_plot_end_idx:]
         residuals_training_test_percent = residuals_full_percent[:training_test_plot_end_idx]
         residuals_holdout_for_plot_percent = residuals_full_percent[training_test_plot_end_idx:]
-
-        # --- Plotting Setup ---
-
-        # Keep constrained_layout=True for automatic spacing
-        fig = plt.figure(figsize=(12, 10), constrained_layout=True) 
         
         # Use GridSpec with height_ratios
         gs = GridSpec(3, 1, figure=fig, height_ratios=[4, 2, 1], hspace=0.05) 
@@ -269,103 +272,69 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.array, lookbac
         ax_main.plot(holdout_time_indices, holdout_pred, marker="o", markersize=2, linestyle="-", label="Predicted", color="red")
         ax_main.fill_between(holdout_time_indices, lower_bound, upper_bound, color="#5DD4FF39", alpha=0.3,
                                 label=f"{(stats.norm.cdf(std_factor) - stats.norm.cdf(-std_factor)) * 100:.2f}% Confidence Interval (Gaussian)")
-
-        ax_main.set_ylabel("GP Price")
-        ax_main.set_title(f"{item_name(item)} [{item}] Predicted vs. Actual Price")
-        ax_main.legend()
-        ax_main.grid()
-
-
+        ax_main.plot(adj_index[fill_outliers.reset_index().index], fill_outliers, 'X', color='red',
+                         markersize=8, markeredgecolor='black', label='Detected Outliers')
         # **Row 2: Residuals Subplot (Full Width, with color change)**
         ax_residuals = fig.add_subplot(gs[1, 0], sharex=ax_main) 
-        
         ax_residuals.plot(training_test_time_indices, residuals_training_test_percent, 
                         marker="o", markersize=2, linestyle="-", label="Residuals (Train/Test)", color='grey')
-        
         ax_residuals.plot(holdout_time_indices, residuals_holdout_for_plot_percent, 
                         marker="o", markersize=2, linestyle="-", label="Residuals (Holdout)", color="skyblue")
         
-        ax_residuals.axhline(y=0, color="black", linestyle="--", alpha=0.7)  
-
-        ax_residuals.set_ylabel("Residuals Percentage") 
-        ax_residuals.legend()
-        ax_residuals.grid()
-
-
         # **Row 3: Histogram of Residuals (Separate Plot)**
         ax_hist = fig.add_subplot(gs[2, 0]) 
         ax_hist.hist(residuals_holdout_for_plot, bins=30, color='skyblue', edgecolor='black', alpha=0.7)
-        ax_hist.set_xlabel("Residual Value")
-        ax_hist.set_ylabel("Frequency") 
-        ax_hist.grid(axis='y', linestyle='--', alpha=0.7)
-
-
-        # --- General Formatting ---
-        plt.setp(ax_main.get_xticklabels(), visible=False) 
-        
-        # Directly set rotation for the x-tick labels on the residuals subplot
-        # This is the bottom-most plot with visible x-axis labels.
-        for label in ax_residuals.get_xticklabels():
-            label.set_rotation(45)
-            label.set_ha('right') # Adjust horizontal alignment after rotation
-
-        # REMOVED: fig.autofmt_xdate(rotation=45) 
-
-        plt.show()
     else: 
         # Residual Calculation
-        residuals = Y[holdout_time_indices] - holdout_pred #not sure if leaking
-        residuals_percent= (residuals/Y[holdout_time_indices])*100
-        
-        fig = plt.figure(figsize=(12, 10), constrained_layout=True) 
+        residuals = Y[-len(holdout_pred):] - holdout_pred #not sure if leaking
+        residuals_percent= (residuals/Y[-len(holdout_pred):])*100
         
         # Use GridSpec with height_ratios
-        gs = GridSpec(3, 1, figure=fig, height_ratios=[4, 2, 1], hspace=0.05) 
+        gs = GridSpec(2, 2, figure=fig, height_ratios=[4, 2], width_ratios=[1,3], hspace=0.05) 
 
         # **Row 1: Main Subplot - Predictions vs. Actual**
-        ax_main = fig.add_subplot(gs[0, 0]) 
+        ax_main = fig.add_subplot(gs[0, :]) 
         ax_main.plot(adj_index, Y[-lookback:], marker="o", markersize=2, linestyle="-", label="Actual", color='white')
         ax_main.plot(holdout_time_indices, holdout_pred, marker="o", markersize=2, linestyle="-", label="Predicted", color="red")
         ax_main.fill_between(holdout_time_indices, lower_bound, upper_bound, color="#5DD4FF39", alpha=0.3,
                                 label=f"{(stats.norm.cdf(std_factor) - stats.norm.cdf(-std_factor)) * 100:.2f}% Confidence Interval (Gaussian)")
 
-        ax_main.set_ylabel("GP Price")
-        ax_main.set_title(f"{item_name(item)} [{item}] Predicted vs. Actual Price")
-        ax_main.legend()
-        ax_main.grid()
-
-
         # **Row 2: Residuals Subplot (Full Width, with color change)**
-        ax_residuals = fig.add_subplot(gs[1, 0], sharex=ax_main) 
-        
+        ax_residuals = fig.add_subplot(gs[1, 1]) 
         ax_residuals.plot(holdout_time_indices, residuals_percent, 
                         marker="o", markersize=2, linestyle="-", label="Residuals (Holdout)", color="skyblue")
-        
-        ax_residuals.axhline(y=0, color="black", linestyle="--", alpha=0.7)  
-
-        ax_residuals.set_ylabel("Residuals Percentage") 
-        ax_residuals.legend()
-        ax_residuals.grid()
-
-
+        ax_residuals.set_xlim(holdout_time_indices[0], holdout_time_indices[-1])
+    
         # **Row 3: Histogram of Residuals (Separate Plot)**
-        ax_hist = fig.add_subplot(gs[2, 0]) 
-        ax_hist.hist(residuals_holdout_for_plot, bins=30, color='skyblue', edgecolor='black', alpha=0.7)
-        ax_hist.set_xlabel("Residual Value")
-        ax_hist.set_ylabel("Frequency") 
-        ax_hist.grid(axis='y', linestyle='--', alpha=0.7)
+        ax_hist = fig.add_subplot(gs[1, 0]) 
+        ax_hist.hist(residuals, bins=30, color='skyblue', edgecolor='black', alpha=0.7)
 
+    #Main Plot
+    ax_main.set_ylabel("GP Price")
+    ax_main.set_title(f"{item_name(item)} [{item}] Predicted vs. Actual Price")
+    ax_main.legend()
+    ax_main.grid()
 
-        # --- General Formatting ---
-        plt.setp(ax_main.get_xticklabels(), visible=False) 
-        
-        # Directly set rotation for the x-tick labels on the residuals subplot
-        # This is the bottom-most plot with visible x-axis labels.
-        for label in ax_residuals.get_xticklabels():
-            label.set_rotation(45)
-            label.set_ha('right') # Adjust horizontal alignment after rotation
+    # Histogram of Residuals
+    ax_hist.set_xlabel("Residual Value")
+    ax_hist.set_ylabel("Frequency") 
+    ax_hist.grid(axis='y', linestyle='--', alpha=0.7)
+    ax_residuals.axhline(y=0, color="black", linestyle="--", alpha=0.7)  
+    ax_residuals.set_ylabel("Residuals Percentage") 
+    ax_residuals.legend()
+    ax_residuals.grid()
 
-        # REMOVED: fig.autofmt_xdate(rotation=45) 
+    #General Formatting
+    plt.setp(ax_main.get_xticklabels(), visible=False) 
+    
+    # Directly set rotation for the x-tick labels on the residuals subplot
+    # This is the bottom-most plot with visible x-axis labels.
+    for label in ax_residuals.get_xticklabels():
+        label.set_rotation(45)
+        label.set_ha('right') # Adjust horizontal alignment after rotation
+
+    # REMOVED: fig.autofmt_xdate(rotation=45) 
+    plt.show()
 
 
 

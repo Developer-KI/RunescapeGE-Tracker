@@ -16,7 +16,7 @@ from statsmodels.tsa.stattools import adfuller
 
 warnings.simplefilter("error")
 
-def XGB(data:pd.DataFrame,target_col:str, holdout:int, recursive:bool=False, transform:str=None, n_estimators:int=200, time_splits:int=5, max_depth:int=5,learning_rate:int=0.03, subsample:int=0.4, colsample_bytree:int=0.8,min_child_weight=5):
+def XGB(data:pd.DataFrame,target_col:str, holdout:int, outlier_threshold:int=0.2, recursive:bool=False, transform:str=None, n_estimators:int=200, time_splits:int=5, max_depth:int=5,learning_rate:int=0.03, subsample:int=0.4, colsample_bytree:int=0.8,min_child_weight=5):
     #*** recursive unimplented***
     full_X = data.drop(target_col, axis=1)
     full_Y = data[target_col]
@@ -71,6 +71,11 @@ def XGB(data:pd.DataFrame,target_col:str, holdout:int, recursive:bool=False, tra
             best_model = model_cv  
             
     if best_model is not None:
+        #outlier detection
+        z_score=(full_Y.pct_change()-full_Y.pct_change().mean())/full_Y.pct_change().std()
+        outliers=full_Y[z_score>outlier_threshold]
+        print(f'Outliers Detected: {len(outliers)}\n--------------------------')
+
         print(f"Cross-validated MASE: {mean(cv_mase):.4f} (±{std(cv_mase):.4f})")
         print(f"Cross-validated MAE: {mean(cv_mae):.4f} (±{std(cv_mae):.4f})")
         print(f"Cross-validated DA: {nanmean(cv_da):.2f}% (±{nanstd(cv_da):.2f})") # Use nanmean/nanstd to handle NaNs
@@ -106,12 +111,16 @@ def XGB(data:pd.DataFrame,target_col:str, holdout:int, recursive:bool=False, tra
             combined_preds_for_da = concatenate(([last_train_actual], final_preds_holdout))
             
             final_holdout_da = tools.calculate_directional_accuracy(combined_actuals_for_da, combined_preds_for_da)
+
+            #outlier detection
+            outliers=full_Y[full_Y.pct_change()>outlier_threshold]
+
             print('--------------------------')
             print(f"Final Holdout MASE: {final_holdout_mase:.4f}")
             print(f"Final Holdout MAE: {final_holdout_mae:.4f}")
             print(f"Final Holdout Directional Accuracy: {final_holdout_da:.2f}%")
 
-            return best_model, final_preds_holdout
+            return best_model, final_preds_holdout, outliers
         else: #WORK IN PROGRESS ------------------
             for i in range(0,len(holdout)+1):
                 X_next = full_X.iloc[-holdout:-holdout+1].to_numpy(dtype='float32') 

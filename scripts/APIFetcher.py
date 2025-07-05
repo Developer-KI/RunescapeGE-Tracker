@@ -96,22 +96,36 @@ def fetch_historical_5m(n = 10, mins=5, waits=1.1, timestamp: int = 0) -> pd.Dat
     return df[['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp']]
 
 def writing_returns(filepath: str = "./data/data.csv", n: int = 100, p: int= 10, timestamp=None,del_duplicates: bool = True) -> None:
-    if timestamp is not None:
-        timestampt_start= timestamp
-    else: 
-        timestampt_start = int(datetime.now().timestamp())
-    timestampt_start = timestampt_start - timestampt_start % 300
-    series_length = 0
-
     with open("./data/data_properties.txt", "r") as file:
-            lines = file.readlines()
-    if lines != list():
-        timestampt_start = int(lines[0].replace("\n", ""))
-        series_length = int(lines[1].replace("\n", ""))
+        lines = file.readlines()
+    if lines:
+        print('Resuming Mining...')
+        timestamp_start = int(lines[0].strip())
+        series_length = int(lines[1].strip())
+    elif timestamp is not None:
+        print('Resuming Mining from Specified Time Period')
+        timestamp_start = timestamp
+        timestamp_start = timestamp_start - timestamp_start % 300
+        series_length=int(lines[1].strip()) #shouldn't wipe series_length so custom scrapes can be appended for API outages/other issues
+    else:
+        print('Mining from Present') 
+        timestamp_start = int(datetime.now().timestamp())
+        timestamp_start = timestamp_start - timestamp_start % 300
+        series_length = 0
+
+    #     timestamp_start = int(datetime.now().timestamp())
+    # timestamp_start = timestamp_start - timestamp_start % 300
+    # series_length = 0
+
+    # with open("./data/data_properties.txt", "r") as file:
+    #         lines = file.readlines()
+    # if lines != list():
+    #     timestamp_start = int(lines[0].replace("\n", ""))
+    #     series_length = int(lines[1].replace("\n", ""))
 
     print(f"Initialized process. Expected mining time: {round(n * p * 1.1 / 60, 3)} minutes")
     for t in range(0, p):
-        df_t = fetch_historical_5m(n = n, timestamp=timestampt_start - ((t * n) * 300))
+        df_t = fetch_historical_5m(n = n, timestamp=timestamp_start - ((t * n) * 300))
         last_call_timestamp = df_t.at[df_t.index[-1], 'timestamp']
         df_t = df_t[['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp']]
         df_t.to_csv(filepath, mode='a', header=False, index=False)
@@ -243,5 +257,6 @@ def fetch_latest_idex_df():
     return df
 #%%
 if __name__ == "__main__":
-    writing_returns(n=10, p=500, timestamp=1747701935,del_duplicates=False)
+    #writing_returns(n=10, p=500, timestamp=1747701935,del_duplicates=False)
+    writing_returns(n=10, p=500,del_duplicates=True)
 #run as .py file
