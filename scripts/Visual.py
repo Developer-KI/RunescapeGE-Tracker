@@ -64,6 +64,8 @@ volatility.index= pd.to_datetime(volatility.index,unit='s')
 plt.figure(figsize=(10,5))
 plt.plot(volatility.index,volatility)
 plt.xticks(rotation=45)
+plt.title(fr'$\mathbf{{{tools.item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Volatility')
+plt.ylabel('Standard Deviations (GP)')
 plt.grid()
 plt.show()
 #%% Leverage Effect (Returns vs Volatility)
@@ -118,8 +120,6 @@ return_period=140 #288 daily
 log_returns=np.log(1+item_price.pct_change(return_period).dropna())
 #log_returns=np.log(1+price_matrix_items[item_price].resample('D').last().dropna()) #daily aggregation
 #%%
-jb_stat, jb_p_value= jarque_bera(log_returns)
-shapiro_stat, shapiro_p_value = shapiro(log_returns)
 
 lower_bound = np.percentile(log_returns, 0.1)
 upper_bound = np.percentile(log_returns, 99.9)
@@ -145,6 +145,10 @@ df_t, loc_t, scale_t = t.fit(log_returns)
 pdf_t= t.pdf(x_plot,df_t,loc_t,scale_t)
 ax.plot(x_plot, pdf_t, 'g-', linewidth=1, label='Student\'s t')
 #Info Box
+
+jb_stat, jb_p_value= jarque_bera(log_returns)
+shapiro_stat, shapiro_p_value = shapiro(log_returns)
+
 textstr = '\n'.join((
     r'$\mu$: %.4f' % (mu_norm,),
     r'$\sigma$: %.4f' % (std_norm,),
@@ -182,3 +186,5 @@ plt.xlabel('Theoretical Quantiles')
 plt.grid()
 plt.show()
 
+
+# %%

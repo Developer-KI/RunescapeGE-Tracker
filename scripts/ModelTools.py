@@ -10,7 +10,10 @@ from sklearn.metrics import mean_absolute_error, root_mean_squared_error
 from sklearn.model_selection import TimeSeriesSplit
 from matplotlib.gridspec import GridSpec
 from statsmodels.tsa.api import SimpleExpSmoothing
+from scipy.stats import norm, t, kurtosis, skew, shapiro, jarque_bera
+import os
 
+print(os.getcwd())
 # plt.rcParams.update({
 #     'axes.facecolor': '#2E2E2E',
 #     'axes.titlecolor': 'white',
@@ -293,7 +296,32 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.array, lookbac
         
         # **Row 3: Histogram of Residuals (Separate Plot)**
         ax_hist = fig.add_subplot(gs[2, 0]) 
-        ax_hist.hist(residuals_holdout_for_plot, bins=30, color='skyblue', edgecolor='black', alpha=0.7)
+        hist_min= np.percentile(residuals_holdout_for_plot,0.5) 
+        hist_max= np.percentile(residuals_holdout_for_plot,99.5)
+        ax_hist.hist(residuals_holdout_for_plot, bins=30, color='skyblue', edgecolor='black', alpha=0.7, range=(hist_min,hist_max), density=True)
+        ax_hist.axvline(0, color='white', linestyle='-', linewidth=1)
+
+        mu_norm, std_norm = norm.fit(residuals_holdout_for_plot)
+        x_plot = np.linspace(hist_min, hist_max, 500)
+        pdf_norm = norm.pdf(x_plot, mu_norm, std_norm)
+        ax_hist.plot(x_plot, pdf_norm, 'r-', linewidth=1, label=r'Normal ($H_0$)')
+
+        jb_stat, jb_p_value= jarque_bera(residuals_holdout_for_plot)
+        shapiro_stat, shapiro_p_value = shapiro(residuals_holdout_for_plot)
+        
+        textstr = '\n'.join((
+            r'$\mu$: %.4f' % (mu_norm,),
+            r'$\sigma$: %.4f' % (std_norm,),
+            r'Skewness: %.3f' % (skew(residuals_holdout_for_plot),),
+            r'Kurtosis: %.3f' % (kurtosis(residuals_holdout_for_plot),),
+            r'Jaque-Bera: %.3f (p=%.3f)' % (jb_stat,jb_p_value),
+            r'Shapiro-Wilk: %.3f (p=%.3f)' % (shapiro_stat,shapiro_p_value)
+        ))
+        props = dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.6)
+        ax_hist.text(0.02, 0.98, textstr, transform=ax_hist.transAxes, fontsize=10,
+                verticalalignment='top', horizontalalignment='left', bbox=props)
+
+
     else: 
         # Residual Calculation
         residuals = Y[-len(holdout_pred):] - holdout_pred #not sure if leaking
