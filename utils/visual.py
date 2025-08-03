@@ -3,8 +3,8 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import DataPipeline as pipeline
-import ModelTools as tools
+import utils.data_pipeline as pipeline
+import utils.model_tools as tools
 import matplotlib.ticker as mticker
 from scipy.stats import norm, t, kurtosis, skew, shapiro, jarque_bera, probplot
 

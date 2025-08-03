@@ -1,10 +1,9 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-from matplotlib.ticker import MaxNLocator
-import DataPipeline as pipeline
-import APIFetcher as fetcher
+from matplotlib.ticker import MaxNLocator, ScalarFormatter
+import utils.data_pipeline as pipeline
+import utils.api_fetcher as fetcher
 import scipy.stats as stats
 from sklearn.metrics import mean_absolute_error, root_mean_squared_error
 from sklearn.model_selection import TimeSeriesSplit
@@ -123,8 +122,8 @@ def plot_classification_vs_price(hist_pricedata,hidden_states,item, model):
         ax.axvspan(timescale[t], timescale[t + 1], color=state_colors[hidden_states[t]], alpha=0.07)
 
     ax.plot(timescale, hist_pricedata[item])
-    ax.yaxis.set_major_formatter(mticker.ScalarFormatter(useMathText=True))
-    ax.yaxis.get_major_formatter().set_scientific(False)
+    ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+    ax.ticklabel_format(style='plain', axis='y', useOffset=False)
     ax.ticklabel_format(useOffset=False) 
 
     ax.set_xlabel("Time")
@@ -146,9 +145,9 @@ def plot_residuals(data: pd.DataFrame, model, lookback: int = 0):
     plt.plot(adj_index, residuals, marker="o", markersize=2, linestyle="-", label="Residuals", color='green')
     plt.axhline(y=0, color="black", linestyle="--", alpha=0.7)  # Reference line
     ax=plt.gca()
-    ax.xaxis.set_major_formatter(mticker.ScalarFormatter(useMathText=True))
-    ax.xaxis.get_major_formatter().set_scientific(False) 
-    ax.xaxis.set_major_locator(mticker.MaxNLocator(nbins=25)) 
+    ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+    ax.ticklabel_format(style='plain', axis='y', useOffset=False)
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=25)) 
     ax.ticklabel_format(useOffset=False)
     plt.xlabel("Time")
     plt.ylabel("Error (Residuals)")
@@ -211,7 +210,7 @@ def test_train_error(data, param:str, exclude_param:dict, model_class, param_ran
     plt.title(f"Train vs. Test Error ({param})")
     plt.show()
  
-def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.array, lookback: int = 0, fill_outliers=None, std_factor: float = 1.96):
+def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookback: int = 0, fill_outliers=None, std_factor: float = 1.96):
     if fill_outliers is not None:
         Y = data[data.columns[0]].copy()
         Y.loc[fill_outliers.index] = np.nan
@@ -299,12 +298,13 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.array, lookbac
         hist_min= np.percentile(residuals_holdout_for_plot,0.5) 
         hist_max= np.percentile(residuals_holdout_for_plot,99.5)
         ax_hist.hist(residuals_holdout_for_plot, bins=30, color='skyblue', edgecolor='black', alpha=0.7, range=(hist_min,hist_max), density=True)
-        ax_hist.axvline(0, color='white', linestyle='-', linewidth=1)
+        ax_hist.axvline(0, color='white', linestyle='--', linewidth=1)
 
         mu_norm, std_norm = norm.fit(residuals_holdout_for_plot)
         x_plot = np.linspace(hist_min, hist_max, 500)
         pdf_norm = norm.pdf(x_plot, mu_norm, std_norm)
         ax_hist.plot(x_plot, pdf_norm, 'r-', linewidth=1, label=r'Normal ($H_0$)')
+        ax_hist.axvline(mu_norm, color='red', linestyle='-', linewidth=1)
 
         jb_stat, jb_p_value= jarque_bera(residuals_holdout_for_plot)
         shapiro_stat, shapiro_p_value = shapiro(residuals_holdout_for_plot)
@@ -369,7 +369,7 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.array, lookbac
     # This is the bottom-most plot with visible x-axis labels.
     for label in ax_residuals.get_xticklabels():
         label.set_rotation(45)
-        label.set_ha('right') # Adjust horizontal alignment after rotation
+        label.set_horizontalalignment('right') # Adjust horizontal alignment after rotation
 
     # REMOVED: fig.autofmt_xdate(rotation=45) 
     plt.show()
