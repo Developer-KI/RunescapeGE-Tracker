@@ -1,17 +1,16 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator, ScalarFormatter
-import utils.data_pipeline as pipeline
-import utils.api_fetcher as fetcher
-import scipy.stats as stats
-from sklearn.metrics import mean_absolute_error, root_mean_squared_error
-from sklearn.model_selection import TimeSeriesSplit
-from matplotlib.gridspec import GridSpec
-from statsmodels.tsa.api import SimpleExpSmoothing
-from scipy.stats import norm, t, kurtosis, skew, shapiro, jarque_bera
-import os
-
+import  pandas as pd
+import  numpy as np
+import  matplotlib.pyplot as plt
+import  utils.api_fetcher as fetcher
+import  scipy.stats as stats
+import  os
+from    matplotlib.ticker import MaxNLocator, ScalarFormatter
+from    utils.data_pipeline import alchemy_preprocess, data_preprocess 
+from    sklearn.metrics import mean_absolute_error
+from    matplotlib.gridspec import GridSpec
+from    statsmodels.tsa.api import SimpleExpSmoothing
+from    scipy.stats import norm, kurtosis, skew, shapiro, jarque_bera
+from    typing import TypeVar, cast
 print(os.getcwd())
 # plt.rcParams.update({
 #     'axes.facecolor': '#2E2E2E',
@@ -36,21 +35,27 @@ plt.rcParams.update({
     "axes.titlecolor": "#A1A1A1"
 
 })
+
 read = pd.read_csv('../data/alchemy_data.csv', header=None)
 ##
-def item_name(id):
+def item_name(id:int) -> str:
     if id==13190:
         return 'Bond'
     else: return str(read.loc[read[0]==int(id)][1].item())
 
-def target_time_features(y: pd.DataFrame, feature_col: str, time_feature: int = 2) -> pd.DataFrame:
+def target_time_features(y:pd.DataFrame, feature_col:str, time_feature:int = 2) -> pd.DataFrame:
     data = y.copy()
     lagged_data = {f'lag{t}': data[feature_col].shift(t) for t in range(1, time_feature + 1)}
     lagged_df = pd.DataFrame(lagged_data, index=data.index)
     
     return pd.concat([data, lagged_df], axis=1)
 
-def rolling_threshold_classification(features:pd.DataFrame, window:int, diffpercent: float): 
+def rolling_threshold_classification(features:pd.DataFrame, window:int, diffpercent:float) -> pd.DataFrame: 
+    if window==0:
+        raise ValueError("Window size must be larger than 0.")
+    elif window==1:
+        print("Window size 1, proceeding with no window.")
+    
     newfeatures= features.copy()
     
     for i in range(0, features.shape[0], window):
@@ -65,97 +70,11 @@ def rolling_threshold_classification(features:pd.DataFrame, window:int, diffperc
         
     return newfeatures.astype(int)
 
-def target_rolling_features(y: pd.DataFrame, feature_col: str, window: int = 2) -> pd.DataFrame:
+def target_rolling_features(y:pd.DataFrame, feature_col:str, window:int = 2) -> pd.DataFrame:
     data = y.copy()
     data['rolling_mean'] = data[feature_col].rolling(window).mean()
     data['rolling_std'] = data[feature_col].rolling(window).std()
     return data[['rolling_mean', 'rolling_std']]
-
-def plot_recent_alch_vs_price(item_id: int) -> None:
-    reference = pipeline.alchemy_preprocess(read=True)
-
-    if item_id in reference.index:
-        df = pipeline.data_preprocess(read=True)
-        df = df.pivot(index="timestamp", columns="item_id", values="wprice")[item_id]
-        plt.figure(figsize=(10, 5))
-        plt.plot(pd.to_datetime(df.index, unit='s'), df.values, marker="o", markersize='2', linestyle="-", label=f"{reference.loc[item_id,'item']} Price")
-        plt.axhline(y=reference.loc[item_id, 'price'], color='cyan', linestyle='-', label='High Alchemy Price')
-
-        plt.xlabel("Time")
-        plt.ylabel("Price")
-        plt.title("Recent Alchemy vs Realized Price")
-        plt.xticks(rotation=45)  # Rotate timestamps for clarity
-        plt.legend()
-        plt.grid()
-
-        plt.show()
-    else: 
-        raise Exception("Invalid ID")
-
-def plot_historical_alch_vs_price(item_id: int) -> None:
-    reference = pipeline.alchemy_preprocess(read=True)
-
-    if item_id in reference.index:
-        df = fetcher.fetch_historical(item_id)
-        plt.figure(figsize=(10, 5))
-        plt.plot(pd.to_datetime(df['timestamp'], unit='s'), df['price'], marker="o", markersize='2', linestyle="-", label=f"{reference.loc[item_id,'item']} Price")
-        plt.axhline(y=reference.loc[item_id, 'price'], color='cyan', linestyle='-', label='High Alchemy Price')
-
-        plt.xlabel("Time")
-        plt.ylabel("Price")
-        plt.title("Historical Alchemy vs Realized Price")
-        plt.legend()
-        plt.xticks(rotation=45)
-        plt.grid()
-
-        plt.show()
-    else: 
-        raise Exception("Invalid ID")
-
-def plot_classification_vs_price(hist_pricedata,hidden_states,item, model):
-    timescale = hist_pricedata.index
-
-    state_colors = {0: "red", 1: "gray", 2: "green"}
-    fig, ax = plt.subplots()
-
-    for t in range(1,len(timescale)-1):
-        ax.axvspan(timescale[t], timescale[t + 1], color=state_colors[hidden_states[t]], alpha=0.07)
-
-    ax.plot(timescale, hist_pricedata[item])
-    ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-    ax.ticklabel_format(style='plain', axis='y', useOffset=False)
-    ax.ticklabel_format(useOffset=False) 
-
-    ax.set_xlabel("Time")
-    ax.set_ylabel("Price")
-    plt.xticks(rotation=45)
-    plt.grid()
-
-    plt.show()
-
-def plot_residuals(data: pd.DataFrame, model, lookback: int = 0):
-    X = data.drop(data.columns[0], axis=1).to_numpy()
-    Y = data[data.columns[0]].to_numpy()
-    adj_index = data.index[lookback:]
-
-    Y_pred = model.predict(X[lookback:])
-    residuals = Y[lookback:] - Y_pred
-
-    plt.figure(figsize=(12, 6))
-    plt.plot(adj_index, residuals, marker="o", markersize=2, linestyle="-", label="Residuals", color='green')
-    plt.axhline(y=0, color="black", linestyle="--", alpha=0.7)  # Reference line
-    ax=plt.gca()
-    ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-    ax.ticklabel_format(style='plain', axis='y', useOffset=False)
-    ax.xaxis.set_major_locator(MaxNLocator(nbins=25)) 
-    ax.ticklabel_format(useOffset=False)
-    plt.xlabel("Time")
-    plt.ylabel("Error (Residuals)")
-    plt.title("Residual Errors Over Time")
-    plt.legend()
-    plt.grid()
-    plt.xticks(rotation=45)
-    plt.show()
 
 def mase(y_true:np.ndarray,y_pred:np.ndarray,y_train:np.ndarray,m:int=1) -> float:
     naive_errors = np.abs(y_train[m:]-y_train[:-m])
@@ -169,212 +88,28 @@ def mase(y_true:np.ndarray,y_pred:np.ndarray,y_train:np.ndarray,m:int=1) -> floa
         print(f"WARNING: y_train length ({len(y_train)}) is too short for period m={m}.")
     return mae_model/np.maximum(naive_mae, np.finfo(np.float64).eps)
 
-def ensure_numpy(X):
+def convert_numpy(X) -> np.ndarray:
     """Convert pandas DataFrame to NumPy array if necessary."""
-    if isinstance(X, pd.DataFrame):
+    if  isinstance(X, pd.DataFrame):
         return X.to_numpy()
-    return X  
-
-def test_train_error(data, param:str, exclude_param:dict, model_class, param_range, split=0.8,loss=mean_absolute_error):
-    values = np.arange(*param_range) 
-    target_item= data.columns[0]
-    
-    train_errors = []
-    test_errors = []
-    split_round=int(np.floor(split*data.shape[0]))
-    X_train= data.drop(f'{target_item}',axis=1).iloc[:split_round]
-    X_test= data.drop(f'{target_item}',axis=1).iloc[split_round+1:]
-    y_train= data[f'{target_item}'].iloc[:split_round]
-    y_test = data[f'{target_item}'].iloc[split_round+1:]
-    for i in values:
-        model_params = {**exclude_param, param:i}
-        model = model_class(**model_params)
-        model.fit(X_train, y_train)
-
-        # Predict on train/test sets
-        train_preds = model.predict(X_train)
-        test_preds = model.predict(X_test)
-
-        # Store errors (Mean Absolute Error or RMSE)
-        train_errors.append(loss(y_train, train_preds))
-        test_errors.append(loss(y_test, test_preds))
-
-
-    # Plot results
-    plt.figure(figsize=(10, 6))
-    plt.plot(values, train_errors, label="Train Error", marker='o')
-    plt.plot(values, test_errors, label="Test Error", marker='o')
-    plt.xlabel("Max Depth")
-    plt.ylabel("Error (MAE)")
-    plt.legend()
-    plt.title(f"Train vs. Test Error ({param})")
-    plt.show()
- 
-def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookback: int = 0, fill_outliers=None, std_factor: float = 1.96):
-    if fill_outliers is not None:
-        Y = data[data.columns[0]].copy()
-        Y.loc[fill_outliers.index] = np.nan
-        Y=Y.ffill().to_numpy()
     else:
-            Y = data[data.columns[0]].to_numpy()
-    item = data.columns[0]
-    # Preserve original timestamps for plotting
-    time_index = data.index.to_numpy()  
+        print("convert_numpy Conversion failure.")
+        return X  
 
-    # adj_index now represents the full time range for plotting, covering the 'lookback' period
-    adj_index = time_index[-lookback:]
+DataFrameOrSeries = TypeVar('DataFrameOrSeries', pd.Series, pd.DataFrame)
+def ensure_datetime_index(s:DataFrameOrSeries) -> DataFrameOrSeries: 
+    #type checker isnt smart enough
+    if not isinstance(s.index, pd.DatetimeIndex):
+        return cast(DataFrameOrSeries, s.set_index(pd.to_datetime(s.index, unit='s', errors='raise', utc=True))) #explicit cast, type checker isn't happy
+    return s.copy()
+
+def spread_rolling_z(feature1:pd.Series, feature2:pd.Series, window:int) -> pd.Series:
     
-    if lookback > data.shape[0]:
-        print(f"Warning: 'lookback' ({lookback}) is greater than dataset size ({data.shape[0]}). Adjusting lookback to max size for plotting consistency.")
-        lookback = data.shape[0]
-        adj_index = time_index
-    # Ensure lookback is at least as large as holdout, otherwise adjust.
-    if lookback < len(holdout_pred):
-        print(f"Warning: 'lookback' ({lookback}) is less than 'holdout' ({len(holdout_pred)}). Adjusting lookback to holdout value for plotting consistency.")
-        lookback = len(holdout_pred)
-        adj_index = time_index[-lookback:]
-        
-    # Determine the slice points for training/test and holdout periods
-    training_test_plot_end_idx = lookback - len(holdout_pred) 
-    
-    # Corresponding time indices for the plot
-    training_test_time_indices = adj_index[:training_test_plot_end_idx]
-    holdout_time_indices = adj_index[training_test_plot_end_idx:]
-
-    # Confidence Interval Calculation
-    pred_std = np.std(holdout_pred)  
-    upper_bound = holdout_pred + std_factor * pred_std
-    lower_bound = holdout_pred - std_factor * pred_std
-    
-    fig = plt.figure(figsize=(12, 10), constrained_layout=True) 
-
-    if not isinstance(model, SimpleExpSmoothing):
-        X = data.drop(data.columns[0], axis=1).to_numpy()
-
-        # Model predictions 
-        #Keep in mind that this generates predictions for all folds from a final trained model
-        #which is inherently leaking data *between* folds, as opposed to generating predictions from within each fold.
-        #The leaking approach is good to examine the training fit given the maximum data, but cannot
-        #help decide hyperparameters or compare performance between folds
-        Y_pred_full_lookback = model.predict(X[-lookback:]) 
-
-        # Residual Calculation
-        residuals_full_lookback = Y[-lookback:] - Y_pred_full_lookback #not sure if leaking
-        residuals_full_percent= (residuals_full_lookback/Y[-lookback:])*100
-        
-        # Separate residuals into training/test and holdout for different colors
-        residuals_training_test = residuals_full_lookback[:training_test_plot_end_idx]
-        residuals_holdout_for_plot = residuals_full_lookback[training_test_plot_end_idx:]
-        residuals_training_test_percent = residuals_full_percent[:training_test_plot_end_idx]
-        residuals_holdout_for_plot_percent = residuals_full_percent[training_test_plot_end_idx:]
-        
-        # Use GridSpec with height_ratios
-        gs = GridSpec(3, 1, figure=fig, height_ratios=[4, 2, 1], hspace=0.05) 
-
-        # **Row 1: Main Subplot - Predictions vs. Actual**
-        ax_main = fig.add_subplot(gs[0, 0]) 
-        ax_main.plot(adj_index, Y[-lookback:], marker="o", markersize=2, linestyle="-", label="Actual", color='white')
-        ax_main.plot(holdout_time_indices, holdout_pred, marker="o", markersize=2, linestyle="-", label="Predicted", color="red")
-        ax_main.fill_between(holdout_time_indices, lower_bound, upper_bound, color="#5DD4FF39", alpha=0.3,
-                                label=f"{(stats.norm.cdf(std_factor) - stats.norm.cdf(-std_factor)) * 100:.2f}% Confidence Interval (Gaussian)")
-        # Only plot outliers that are within the current plotting window
-        if fill_outliers is not None and not fill_outliers.empty:
-            # adj_index is your x-axis (timestamps), fill_outliers.index should be timestamps too
-            outlier_idx = np.intersect1d(adj_index, fill_outliers.index)
-            ax_main.plot(
-                outlier_idx,
-                fill_outliers.loc[outlier_idx],
-                'X', color='yellow', markersize=8, markeredgecolor='black', label='Detected Outliers'
-            )
-        # **Row 2: Residuals Subplot (Full Width, with color change)**
-        ax_residuals = fig.add_subplot(gs[1, 0], sharex=ax_main) 
-        ax_residuals.plot(training_test_time_indices, residuals_training_test_percent, 
-                        marker="o", markersize=2, linestyle="-", label="Residuals (Train/Test)", color='grey')
-        ax_residuals.plot(holdout_time_indices, residuals_holdout_for_plot_percent, 
-                        marker="o", markersize=2, linestyle="-", label="Residuals (Holdout)", color="skyblue")
-        
-        # **Row 3: Histogram of Residuals (Separate Plot)**
-        ax_hist = fig.add_subplot(gs[2, 0]) 
-        hist_min= np.percentile(residuals_holdout_for_plot,0.5) 
-        hist_max= np.percentile(residuals_holdout_for_plot,99.5)
-        ax_hist.hist(residuals_holdout_for_plot, bins=30, color='skyblue', edgecolor='black', alpha=0.7, range=(hist_min,hist_max), density=True)
-        ax_hist.axvline(0, color='white', linestyle='--', linewidth=1)
-
-        mu_norm, std_norm = norm.fit(residuals_holdout_for_plot)
-        x_plot = np.linspace(hist_min, hist_max, 500)
-        pdf_norm = norm.pdf(x_plot, mu_norm, std_norm)
-        ax_hist.plot(x_plot, pdf_norm, 'r-', linewidth=1, label=r'Normal ($H_0$)')
-        ax_hist.axvline(mu_norm, color='red', linestyle='-', linewidth=1)
-
-        jb_stat, jb_p_value= jarque_bera(residuals_holdout_for_plot)
-        shapiro_stat, shapiro_p_value = shapiro(residuals_holdout_for_plot)
-        
-        textstr = '\n'.join((
-            r'$\mu$: %.4f' % (mu_norm,),
-            r'$\sigma$: %.4f' % (std_norm,),
-            r'Skewness: %.3f' % (skew(residuals_holdout_for_plot),),
-            r'Kurtosis: %.3f' % (kurtosis(residuals_holdout_for_plot),),
-            r'Jaque-Bera: %.3f (p=%.3f)' % (jb_stat,jb_p_value),
-            r'Shapiro-Wilk: %.3f (p=%.3f)' % (shapiro_stat,shapiro_p_value)
-        ))
-        props = dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.6)
-        ax_hist.text(0.02, 0.98, textstr, transform=ax_hist.transAxes, fontsize=10,
-                verticalalignment='top', horizontalalignment='left', bbox=props)
-
-
-    else: 
-        # Residual Calculation
-        residuals = Y[-len(holdout_pred):] - holdout_pred #not sure if leaking
-        residuals_percent= (residuals/Y[-len(holdout_pred):])*100
-        
-        # Use GridSpec with height_ratios
-        gs = GridSpec(2, 2, figure=fig, height_ratios=[4, 2], width_ratios=[1,3], hspace=0.05) 
-
-        # **Row 1: Main Subplot - Predictions vs. Actual**
-        ax_main = fig.add_subplot(gs[0, :]) 
-        ax_main.plot(adj_index, Y[-lookback:], marker="o", markersize=2, linestyle="-", label="Actual", color='white')
-        ax_main.plot(holdout_time_indices, holdout_pred, marker="o", markersize=2, linestyle="-", label="Predicted", color="red")
-        ax_main.fill_between(holdout_time_indices, lower_bound, upper_bound, color="#5DD4FF39", alpha=0.3,
-                                label=f"{(stats.norm.cdf(std_factor) - stats.norm.cdf(-std_factor)) * 100:.2f}% Confidence Interval (Gaussian)")
-
-        # **Row 2: Residuals Subplot (Full Width, with color change)**
-        ax_residuals = fig.add_subplot(gs[1, 1]) 
-        ax_residuals.plot(holdout_time_indices, residuals_percent, 
-                        marker="o", markersize=2, linestyle="-", label="Residuals (Holdout)", color="skyblue")
-        ax_residuals.set_xlim(holdout_time_indices[0], holdout_time_indices[-1])
-    
-        # **Row 3: Histogram of Residuals (Separate Plot)**
-        ax_hist = fig.add_subplot(gs[1, 0]) 
-        ax_hist.hist(residuals, bins=30, color='skyblue', edgecolor='black', alpha=0.7)
-
-    #Main Plot
-    ax_main.set_ylabel("GP Price")
-    ax_main.set_title(fr"$\mathbf{{{item_name(item)}}}$ [{item}] Predicted vs. Actual Price")
-    ax_main.legend()
-    ax_main.grid()
-
-    # Histogram of Residuals
-    ax_hist.set_xlabel("Residual Value")
-    ax_hist.set_ylabel("Frequency") 
-    ax_hist.grid(axis='y', linestyle='--', alpha=0.7)
-    ax_residuals.axhline(y=0, color="black", linestyle="--", alpha=0.7)  
-    ax_residuals.set_ylabel("Residuals Percentage") 
-    ax_residuals.legend()
-    ax_residuals.grid()
-
-    #General Formatting
-    plt.setp(ax_main.get_xticklabels(), visible=False) 
-    
-    # Directly set rotation for the x-tick labels on the residuals subplot
-    # This is the bottom-most plot with visible x-axis labels.
-    for label in ax_residuals.get_xticklabels():
-        label.set_rotation(45)
-        label.set_horizontalalignment('right') # Adjust horizontal alignment after rotation
-
-    # REMOVED: fig.autofmt_xdate(rotation=45) 
-    plt.show()
-
-
+    spread = feature1-feature2
+    rolling_mean = spread.rolling(window=window).mean()
+    rolling_std = spread.rolling(window=window).std()
+    rolling_z = (spread - rolling_mean)/rolling_std
+    return rolling_z #contains NaNs!
 
 def calculate_directional_accuracy(actual_prices: np.ndarray, predicted_prices: np.ndarray) -> float:
    
@@ -403,3 +138,55 @@ def calculate_directional_accuracy(actual_prices: np.ndarray, predicted_prices: 
     correct_predictions = np.sum(actual_direction == predicted_direction)
 
     return (correct_predictions / len(actual_changes_from_last_actual)) * 100
+
+def prep_tree_model(data:pd.DataFrame, target_col:str, holdout:int) -> tuple:
+
+    if holdout<=0:
+        raise ValueError("holdout period must be non-negative.")
+    
+    full_x = data.drop(target_col, axis=1)
+    full_y = data[target_col]
+    
+    return full_x, full_y
+
+def score_tree_model(full_y, holdout, y_holdout, final_preds_holdout, final_train_Y) -> tuple:
+
+    final_holdout_mase = mase(y_holdout, final_preds_holdout, final_train_Y, 1)
+    final_holdout_mae = mean_absolute_error(y_holdout, final_preds_holdout)
+
+    # Calculate Final Holdout DA
+    # Get the last actual price from the training data before the holdout
+    last_train_actual = full_y.iloc[-holdout - 1] 
+    
+    # Combine last training actual with holdout actuals mand predictions
+    combined_actuals_for_da = np.concatenate(([last_train_actual], y_holdout))
+    combined_preds_for_da = np.concatenate(([last_train_actual], final_preds_holdout))
+    
+    final_holdout_da = calculate_directional_accuracy(combined_actuals_for_da, combined_preds_for_da)
+
+    return final_holdout_mae, final_holdout_mase, final_holdout_da
+def outlier_detection(best_model, full_y, full_x, window_size, outlier_threshold) -> pd.Series:
+#outlier detection REWORK 
+        window_size = 20
+        epsilon = 1e-8
+        residuals = full_y - best_model.predict(full_x.to_numpy(dtype='float32'))
+        mad_resid = residuals.rolling(window=window_size).apply(lambda x: np.median(abs(x - np.median(x))))
+        mod_z_resid = 0.6745 * (residuals - residuals.rolling(window=window_size).median()) / (mad_resid + epsilon) #hard-coded value why?
+        outliers = full_y[abs(mod_z_resid) > outlier_threshold]
+
+        return outliers
+
+def beta(
+    data:           pd.DataFrame,
+    item:           int,
+    market_index:   pd.Series,
+    start:          str|None = None,
+    end:            str|None = None,
+) -> float: 
+    timestamp_slice = None
+    market_index_slice = None
+
+    market_index_slice = market_index.loc[start:end]
+    
+    beta = market_index_slice.corr(data[item]) * (data[item].loc[start:end].std()/market_index.loc[start:end].std())
+    return beta

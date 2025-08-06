@@ -3,10 +3,11 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import utils.data_pipeline as pipeline
-import utils.model_tools as tools
 import matplotlib.ticker as mticker
-from scipy.stats import norm, t, kurtosis, skew, shapiro, jarque_bera, probplot
+from   utils.data_pipeline import data_preprocess2, volatility_market, alchemy_preprocess
+from   utils.model_tools import item_name
+import utils.plot_tools as myplot
+from   scipy.stats import norm, t, kurtosis, skew, shapiro, jarque_bera, probplot
 
 
 
@@ -25,8 +26,8 @@ plt.rcParams.update({
 
 # %%
 #Read/Write processed data
-price_data = pipeline.data_preprocess2(read=True)
-reference = pipeline.alchemy_preprocess(read=True)
+price_data = data_preprocess2(read=True)
+reference = alchemy_preprocess(read=True)
 
 # %%
 #Price and Volume Time series
@@ -37,7 +38,7 @@ corr_price_items = price_matrix_items.corr()
 corr_volume_items = volume_matrix_items.corr()
 
 start = 20
-market_volatility = pipeline.volatility_market(price_data, smoothing=start)
+market_volatility = volatility_market(price_data, smoothing=start)
 vix_index= market_volatility.iloc[start:].index
 plot_index = pd.to_datetime(market_volatility.iloc[:].index, unit='s')
 
@@ -64,13 +65,13 @@ volatility.index= pd.to_datetime(volatility.index,unit='s')
 plt.figure(figsize=(10,5))
 plt.plot(volatility.index,volatility)
 plt.xticks(rotation=45)
-plt.title(fr'$\mathbf{{{tools.item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Volatility')
+plt.title(fr'$\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Volatility')
 plt.ylabel('Standard Deviations (GP)')
 plt.grid()
 plt.show()
 #%% Leverage Effect (Returns vs Volatility)
 plt.figure(figsize=(10,5))
-plt.title(fr'$\mathbf{{{tools.item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Volatility vs. $\mathbf{{{return_period}}}$-Period Lagged $\mathbf{{{lookback}}}$ Returns')
+plt.title(fr'$\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Volatility vs. $\mathbf{{{return_period}}}$-Period Lagged $\mathbf{{{lookback}}}$ Returns')
 plt.scatter(volatility, log_returns[volatility.index].shift(lookback), alpha=0.5, color='skyblue', edgecolor='black')
 plt.xlabel('Market Volatility')
 plt.ylabel('Log Returns')
@@ -91,15 +92,15 @@ item = 4087
 plt.figure(figsize=(10,5))
 plt.plot(pd.to_datetime(plot_index, unit='s'), volume_matrix_items[item], marker="o", markersize='2', linestyle="-", label="Volume")
 plt.ylabel("Volume of Trade")
-plt.title(fr"$\mathbf{{{tools.item_name(item)}}}$ [{item}] $\mathbf{{{round((market_volatility.shape[0]*5)/(60*24),1)}}}$ Day Market Volume")
+plt.title(fr"$\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{round((market_volatility.shape[0]*5)/(60*24),1)}}}$ Day Market Volume")
 plt.xticks(rotation=45)
 plt.grid()
 plt.show()
 
 #%% Item Price vs Alchemy Price Plot
 #219, 12934, 
-tools.plot_historical_alch_vs_price(5304)
-tools.plot_recent_alch_vs_price(5304)
+myplot.plot_historical_alch_vs_price(5304)
+myplot.plot_recent_alch_vs_price(5304)
 # %%
 # Total Volume Plot 
 plt.figure(figsize=(10,5))
@@ -108,7 +109,7 @@ plt.ylabel("Volume of Market Trade")
 plt.title(fr"$\mathbf{{{round((market_volatility.shape[0]*5)/(60*24),1)}}}$ Day Market Volume of the $\mathbf{{{volume_matrix_items.shape[1]}}}$ Most Traded Items")
 plt.xticks(rotation=45)
 plt.gca().yaxis.set_major_formatter(mticker.ScalarFormatter(useMathText=True))
-plt.gca().yaxis.get_major_formatter().set_scientific(False) 
+plt.gca().ticklabel_format(style='plain', axis='y') 
 plt.grid()
 plt.show()
 #%% Log Return Distributional Visual
@@ -130,7 +131,7 @@ plt.ylabel('Returns Density')
 plt.xlim(lower_bound, upper_bound)
 plt.axvline(0, color='white', linestyle='-', linewidth=1)
 plt.yscale('log')
-plt.title(fr"$\mathbf{{{tools.item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Log Return Distribution") #ignore period for aggregated (?)
+plt.title(fr"$\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Log Return Distribution") #ignore period for aggregated (?)
 
 
 plt.hist(log_returns, bins='fd', color='skyblue', edgecolor='black', alpha=0.7, density=True)
@@ -169,7 +170,7 @@ plt.figure(figsize=(10,5))
 out=probplot(log_returns, dist="norm", fit=True, rvalue=True, plot=plt)
 
 plt.text(0.1, 0.7, f'$R^2$={out[1][2]**2:.3f}', transform=plt.gca().transAxes, fontsize=13,color='white', bbox=dict(facecolor='black', alpha=0.5, boxstyle='round,pad=0.5'))
-plt.title(fr'QQ Plot: $\mathbf{{{tools.item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Log Returns vs Normal')
+plt.title(fr'QQ Plot: $\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Log Returns vs Normal')
 plt.ylabel('Sample Quantiles')
 plt.xlabel('Theoretical Quantiles')
 plt.grid()
@@ -180,7 +181,7 @@ plt.figure(figsize=(10,5))
 out=probplot(log_returns, dist="t", sparams=(4.39,), fit=True, rvalue=True, plot=plt)
 
 plt.text(0.1, 0.7, f'$R^2$={out[1][2]**2:.3f}', transform=plt.gca().transAxes, fontsize=13,color='white', bbox=dict(facecolor='black', alpha=0.5, boxstyle='round,pad=0.5'))
-plt.title(fr'QQ Plot: $\mathbf{{{tools.item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Log Returns vs Student\'s t')
+plt.title(fr'QQ Plot: $\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Log Returns vs Student\'s t')
 plt.ylabel('Sample Quantiles')
 plt.xlabel('Theoretical Quantiles')
 plt.grid()

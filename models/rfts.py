@@ -1,25 +1,33 @@
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 import optuna
-from utils import model_tools as tools
-import warnings
-import scipy.stats as scistats
-from statsmodels.tsa.stattools import adfuller
+from   sklearn.ensemble import RandomForestRegressor
+from   sklearn.model_selection import TimeSeriesSplit
+from   sklearn.metrics import mean_absolute_error
+from   utils import model_tools as tools
+from   statsmodels.tsa.stattools import adfuller
+from   typing import Literal
+#from   scipy.stats import boxcox
+from   warnings import simplefilter
 
-warnings.simplefilter("error")
+simplefilter("error")
 
-def RFTS(data:pd.DataFrame,target_col:str, holdout:int, outlier_threshold:float=2, recursive:bool=False, transform=None, time_splits:int=5,min_samples_leaf:int=5,n_estimators:int=100,min_samples_split:int=5,max_features:str='sqrt',max_depth:int=10) -> RandomForestRegressor:
-    #*** recursive unimplented***
-    full_X = data.drop(target_col, axis=1)
-    full_Y = data[target_col]
-    if transform != None:
-        dtype = 'float64'
-    else: dtype = 'float32'
-    X = data.drop(target_col, axis=1).iloc[:-holdout].to_numpy(dtype=dtype)
-    Y = data[target_col].iloc[:-holdout].to_numpy(dtype=dtype)
+def train_rfts_model(
+    data:               pd.DataFrame,
+    target_col:         str,
+    holdout:            int,
+    time_splits:        int = 5,
+    min_samples_leaf:   int = 5,
+    min_samples_split:  int = 5,
+    n_estimators:       int = 100,
+    max_features:       float | Literal['sqrt', 'log2'] = 'sqrt',
+    max_depth:          int = 10,
+) -> tuple:
+    dtype = 'float32'
+    
+    full_x, full_y = tools.prep_tree_model(data, target_col, holdout)
+    train_x = data.drop(target_col, axis=1).iloc[:-holdout].to_numpy(dtype=dtype)
+    train_y = data[target_col].iloc[:-holdout].to_numpy(dtype=dtype)
 
     tscv = TimeSeriesSplit(n_splits=time_splits)
     cv_mase=[]
@@ -29,18 +37,9 @@ def RFTS(data:pd.DataFrame,target_col:str, holdout:int, outlier_threshold:float=
     best_mase=float('inf')
     best_model=None
 
-    for train_idx, test_idx in tscv.split(X):
-        X_train_cv, X_test_cv = X[train_idx,:], X[test_idx,:]
-        y_train_cv, y_test_cv = Y[train_idx], Y[test_idx]
-
-        if transform=='boxcox': #non-price spike pruning will cause integer overflows
-            y_train_cv=y_train_cv.astype(np.float64)
-            adf_count=0
-            y_train_cv, _ = scistats.boxcox(y_train_cv)
-            print(y_train_cv)
-            adf_result =adfuller(y_train_cv)[1]
-            if adf_result >0.05:
-                adf_count=adf_count+1
+    for train_idx, test_idx in tscv.split(train_x):
+        X_train_cv, X_test_cv = train_x[train_idx,:], train_x[test_idx,:]
+        y_train_cv, y_test_cv = train_y[train_idx], train_y[test_idx]
 
         model_cv = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, min_samples_split=min_samples_split, min_samples_leaf=min_samples_leaf, max_features=max_features, n_jobs=-1)
         model_cv.fit(X_train_cv, y_train_cv) 
@@ -68,72 +67,73 @@ def RFTS(data:pd.DataFrame,target_col:str, holdout:int, outlier_threshold:float=
             best_model = model_cv  
             
     if best_model is not None:
-        #outlier detection REWORK 
-        window_size = 20
-        epsilon = 1e-8
-        residuals = full_Y - best_model.predict(full_X.to_numpy(dtype='float32'))
-        mad_resid = residuals.rolling(window=window_size).apply(lambda x: np.median(abs(x - np.median(x))))
-        mod_z_resid = 0.6745 * (residuals - residuals.rolling(window=window_size).median()) / (mad_resid + epsilon) #hard-coded value why?
-        outliers = full_Y[abs(mod_z_resid) > outlier_threshold]
-        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
-    
-        print(f"Cross-validated MASE: {np.mean(cv_mase):.4f} (±{np.std(cv_mase):.4f})")
-        print(f"Cross-validated MAE: {np.mean(cv_mae):.4f} (±{np.std(cv_mae):.4f})")
-        print(f"Cross-validated DA: {np.nanmean(cv_da):.2f}% (±{np.nanstd(cv_da):.2f})") # Use nanmean/nanstd to handle NaNs
-        if transform!= None:
-            print(f"Aggregated Training Augmented Dickey-Fuller Rejection: {adf_count/time_splits}%")
-
+        
         #**fix AI numpy conversion slop**
         # Final model training
-        final_train_X = full_X.iloc[:-holdout].to_numpy(dtype='float32')
-        final_train_Y = full_Y.iloc[:-holdout].to_numpy(dtype='float32')
+        final_train_X = full_x.iloc[:-holdout].to_numpy(dtype='float32')
+        final_train_Y = full_y.iloc[:-holdout].to_numpy(dtype='float32')
         best_model.fit(final_train_X, final_train_Y)
 
-        # Final model training
-        final_train_X = full_X.iloc[:-holdout].to_numpy(dtype='float32')
-        final_train_Y = full_Y.iloc[:-holdout].to_numpy(dtype='float32')
-        best_model.fit(final_train_X, final_train_Y)
-       
-        if recursive==False:
-            # Final holdout evaluation
-            X_holdout = full_X.iloc[-holdout:].to_numpy(dtype='float32') 
-            Y_holdout = full_Y.iloc[-holdout:].to_numpy(dtype='float32')
-            final_preds_holdout = best_model.predict(X_holdout)
-
-            final_holdout_mase = tools.mase(Y_holdout, final_preds_holdout, final_train_Y, 1)
-            final_holdout_mae = mean_absolute_error(Y_holdout, final_preds_holdout)
-
-            # Calculate Final Holdout DA
-            # Get the last actual price from the training data before the holdout
-            last_train_actual = full_Y.iloc[-holdout - 1] 
-            
-            # Combine last training actual with holdout actuals and predictions
-            combined_actuals_for_da = np.concatenate(([last_train_actual], Y_holdout))
-            combined_preds_for_da = np.concatenate(([last_train_actual], final_preds_holdout))
-            
-            final_holdout_da = tools.calculate_directional_accuracy(combined_actuals_for_da, combined_preds_for_da)
-
-            print('--------------------------')
-            print(f"Final Holdout MASE: {final_holdout_mase:.4f}")
-            print(f"Final Holdout MAE: {final_holdout_mae:.4f}")
-            print(f"Final Holdout Directional Accuracy: {final_holdout_da:.2f}%")
-
-            return best_model, final_preds_holdout, outliers
-        else: #WORK IN PROGRESS ------------------
-            for i in range(0,len(holdout)+1):
-                X_next = full_X.iloc[-holdout:-holdout+1].to_numpy(dtype='float32') 
-                Y_next = full_Y.iloc[-holdout:-holdout+1].to_numpy(dtype='float32')
-                final_preds_recursive = best_model.predict(X_next)
-                X_next= np.concatenate(final_preds_recursive,X_next)
-                Y_next= np.concatenate(final_preds_recursive,Y_next)
+        # Final holdout evaluation
+        x_holdout = full_x.iloc[-holdout:].to_numpy(dtype='float32') 
+        
+        final_preds_holdout = best_model.predict(x_holdout)
+        
+        return best_model, final_preds_holdout, final_train_Y, cv_mae, cv_mase, cv_da
     else:
-        raise Exception("Failed to choose model")
+        raise Exception("Failed to choose model.")
+
+def RFTS(
+    data:               pd.DataFrame,
+    target_col:         str,
+    holdout:            int,
+    outlier_threshold:  float = 2,
+    time_splits:        int = 5,
+    min_samples_leaf:   int = 5,
+    min_samples_split:  int = 5,
+    n_estimators:       int = 100,
+    max_features:       float | Literal['sqrt', 'log2'] = 'sqrt',
+    max_depth:          int = 10
+) -> tuple:
     
-def RFTSOptim(data:pd.DataFrame,target_col:str, holdout:int,n_trials:int=30,pruner:bool=True,meta_weight=False)-> dict:
+    full_x, full_y = tools.prep_tree_model(data, target_col, holdout)
+    y_holdout = full_y.iloc[-holdout:].to_numpy(dtype='float32')
+
+    best_model, final_preds_holdout, final_train_Y, cv_mae, cv_mase, cv_da = train_rfts_model(
+        data, 
+        target_col, 
+        holdout, 
+        time_splits, 
+        min_samples_leaf, 
+        min_samples_split, 
+        n_estimators, 
+        max_features, 
+        max_depth
+        )
+    final_holdout_mae, final_holdout_mase, final_holdout_da = tools.score_tree_model(full_y, holdout, y_holdout, final_preds_holdout, final_train_Y)
+    
+    window_size = 20
+    outliers = tools.outlier_detection(best_model, full_y, full_x, window_size, outlier_threshold)
+
+    print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
+    print(f"Cross-validated MASE: {np.mean(cv_mase):.4f} (±{np.std(cv_mase):.4f})")
+    print(f"Cross-validated MAE: {np.mean(cv_mae):.4f} (±{np.std(cv_mae):.4f})")
+    print(f"Cross-validated DA: {np.nanmean(cv_da):.2f}% (±{np.nanstd(cv_da):.2f})") # Use nanmean/nanstd to handle NaNs
+
+    #*** recursive unimplented***
+
+    print('--------------------------')
+    print(f"Final Holdout MASE: {final_holdout_mase:.4f}")
+    print(f"Final Holdout MAE: {final_holdout_mae:.4f}")
+    print(f"Final Holdout Directional Accuracy: {final_holdout_da:.2f}%")
+
+    return best_model, final_preds_holdout, outliers
+        
+def RFTSOptim(data:pd.DataFrame,target_col:str, holdout:int,n_trials:int=30,pruner:bool=True,meta_weight=False)-> tuple:
     X = data.drop(target_col, axis=1).iloc[:-holdout].to_numpy(dtype="float32")
     Y = data[target_col].iloc[:-holdout].to_numpy(dtype="float32")
 
-    def objective(trial):
+    def objective(trial) -> float:
         if meta_weight==True:
             alpha = trial.suggest_float("alpha", 0.1, 2.0)
         else: alpha=1
@@ -169,9 +169,9 @@ def RFTSOptim(data:pd.DataFrame,target_col:str, holdout:int,n_trials:int=30,prun
                 best_test_idx=test_idx
         trial.set_user_attr("best_test_idx", best_test_idx)
         trial.set_user_attr("mase_scores", mase_scores)
-        return np.mean(mase_scores)*alpha+np.std(mase_scores)
+        return float(np.mean(mase_scores)*alpha+np.std(mase_scores))
     
-    study = optuna.create_study(directions=["minimize"])
+    study = optuna.create_study(direction="minimize")
     study.optimize(objective, n_trials=n_trials, n_jobs=4) #check processor cores for parallelization 
 
     # Select first Pareto-optimal trial to train final model

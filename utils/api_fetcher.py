@@ -1,8 +1,7 @@
-from numpy import void
 import requests
 import pandas as pd
-from datetime import datetime
 import time
+from   datetime import datetime
 #%%
 headers = {
     'User-Agent': 'Price/Volume Tracker and Scraper- NoHFT',
