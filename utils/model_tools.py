@@ -11,6 +11,9 @@ from    matplotlib.gridspec import GridSpec
 from    statsmodels.tsa.api import SimpleExpSmoothing
 from    scipy.stats import norm, kurtosis, skew, shapiro, jarque_bera
 from    typing import TypeVar, cast
+from    datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+
 print(os.getcwd())
 # plt.rcParams.update({
 #     'axes.facecolor': '#2E2E2E',
@@ -38,10 +41,27 @@ plt.rcParams.update({
 
 read = pd.read_csv('../data/alchemy_data.csv', header=None)
 ##
-def item_name(id:int) -> str:
-    if id==13190:
-        return 'Bond'
-    else: return str(read.loc[read[0]==int(id)][1].item())
+EXCEPTIONS = {
+    13190: 'Bond',
+    23064: 'Jar of Chemicals',
+}
+
+def item_name(id: int | str) -> str | int:
+    if type(id) is int:
+        if id in EXCEPTIONS:
+            return EXCEPTIONS[id]
+        else:
+            return read.loc[read[0] == id, 1].item()
+    
+    elif type(id) is str:
+        #inverse mapping lookup
+        inverse_exceptions = {v: k for k, v in EXCEPTIONS.items()}
+        if id in inverse_exceptions:
+            return inverse_exceptions[id]
+        else:
+            return read.loc[read[1] == id, 0].item()
+
+    else: raise ValueError("Item lookup error")
 
 def target_time_features(y:pd.DataFrame, feature_col:str, time_feature:int = 2) -> pd.DataFrame:
     data = y.copy()
@@ -98,9 +118,21 @@ def convert_numpy(X) -> np.ndarray:
 
 DataFrameOrSeries = TypeVar('DataFrameOrSeries', pd.Series, pd.DataFrame)
 def ensure_datetime_index(s:DataFrameOrSeries) -> DataFrameOrSeries: 
-    #type checker isnt smart enough
-    if not isinstance(s.index, pd.DatetimeIndex):
-        return cast(DataFrameOrSeries, s.set_index(pd.to_datetime(s.index, unit='s', errors='raise', utc=True))) #explicit cast, type checker isn't happy
+    # Check if the index is already a DatetimeIndex
+    if isinstance(s.index, pd.DatetimeIndex):
+        return s.copy()
+
+    # Create the new DatetimeIndex
+    new_index = pd.to_datetime(s.index, unit='s', errors='raise', utc=True)
+    
+    # Handle DataFrame and Series differently
+    if isinstance(s, pd.DataFrame):
+        # For a DataFrame, create a new DataFrame with the new index
+        s = s.set_index(new_index)
+    elif isinstance(s, pd.Series):
+        # For a Series, directly assign the new index
+        s.index = new_index
+        
     return s.copy()
 
 def spread_rolling_z(feature1:pd.Series, feature2:pd.Series, window:int) -> pd.Series:
@@ -190,3 +222,96 @@ def beta(
     
     beta = market_index_slice.corr(data[item]) * (data[item].loc[start:end].std()/market_index.loc[start:end].std())
     return beta
+
+
+def generate_dates_with_rollover(start_date_str, day_numbers_str):
+    """
+    Generates a list of dates by conditionally rolling back the month.
+    The month rolls back by one only when a day number in the list is
+    greater than the last day number processed.
+
+    Args:
+        start_date_str (str): The date to start from, in 'YYYY-MM-DD' format.
+        day_numbers_str (str): A comma-separated string of day numbers to use.
+                               e.g., "27, 25, 4, 1, 25, 16".
+    Returns:
+        pd.DatetimeIndex: A pandas DatetimeIndex containing the generated dates.
+    """
+    try:
+        current_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+        day_numbers = [int(d.strip()) for d in day_numbers_str.split(',')]
+    except (ValueError, IndexError):
+        print("Error: Please check your date and day number formats.")
+        return pd.DatetimeIndex([])
+
+    generated_dates = []
+    
+    # Initialize the last_day_seen to a high value to handle the first entry
+    last_day_seen = current_date.day + 1
+
+    for day in day_numbers:
+        # Check for a month rollover condition
+        # This happens if the new day number is greater than the last one seen
+        if day > last_day_seen:
+            current_date -= relativedelta(months=1)
+        
+        # Create a new date object with the current month/year and the new day
+        new_date = current_date.replace(day=day)
+        generated_dates.append(new_date)
+        
+        # Update the last day seen for the next iteration
+        last_day_seen = day
+
+    # Convert the list of datetime objects into a DatetimeIndex
+    return pd.to_datetime(generated_dates)
+
+def create_item_index(data: pd.DataFrame|list, items:list, type:str, base_value:int=100) -> pd.Series:
+    """
+    Args:
+        data (pd.DataFrame|str): Ensure passing in a list of price and volume DataFrames is ordered [price,volume].
+        items (list): A comma separated list of item IDs.
+        base_value (int, default 100): Index starting value.
+    """
+    base_value = 100
+    if isinstance(data, pd.DataFrame):
+        data_columns = set(data.columns)
+    elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], pd.DataFrame) and isinstance(data[1], pd.DataFrame):
+        data_columns = set(data[0].columns)
+    else:
+        raise ValueError("Invalid data type for check.")
+
+    if not all(column in data_columns for column in items):
+        missing_items = [column for column in items if column not in data_columns]
+        print(f"Warning: One or more items in the 'items' list do not exist in the DataFrame: {missing_items}")
+        print("Removing missing items and proceeding...")
+        items_to_keep = [column for column in items if column in data_columns]
+        items = items_to_keep
+
+    
+    if type == 'equal':
+        if data is list:
+            raise ValueError("data should be a single DataFrame")
+        price_matrix = data
+        selection_price = price_matrix[items]
+        base_prices = selection_price.iloc[0,:]
+
+        price_ratio = data.div(base_prices, axis=1)
+        mean_ratio = price_ratio.mean(axis=1) 
+        index_equal_weight = mean_ratio * base_value
+        return index_equal_weight
+    elif type == 'vprice':
+        if data is pd.DataFrame:
+            raise ValueError("vprice indicies must include a list of price and volume matrix DataFrames")
+        price_matrix = data[0]
+        selection_price = price_matrix[items]
+        volume_matrix = data[1]
+        selection_volume = volume_matrix[items]
+        base_prices = selection_price.iloc[0,:]
+        price_ratio = price_matrix.div(base_prices, axis=1)
+
+        vprice_matrix = selection_price * selection_volume
+        sum_vprice_matrix = vprice_matrix.sum(axis=1)
+        vprice_ratio = sum_vprice_matrix/sum_vprice_matrix.iloc[0]
+        index_volume_weight = base_value * vprice_ratio
+        return index_volume_weight
+    else: raise ValueError("Select valid index type")

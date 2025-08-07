@@ -4,11 +4,17 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+import os
+import sys
+project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
+if project_root not in sys.path: sys.path.append(project_root)
 from   utils.data_pipeline import data_preprocess2, volatility_market, alchemy_preprocess
 from   utils.model_tools import item_name
 import utils.plot_tools as myplot
 from   scipy.stats import norm, t, kurtosis, skew, shapiro, jarque_bera, probplot
-
+import seaborn as sns
+from testing.feature_engineering import market_index_equal_weight as EQUAL_INDEX,   market_index_volume_weight as VPRICE_INDEX
+import utils.model_tools as tools
 
 
 plt.rcParams.update({
@@ -37,6 +43,8 @@ totalvolume_time = volume_matrix_items.iloc[:,1:].sum(axis=1)
 corr_price_items = price_matrix_items.corr()
 corr_volume_items = volume_matrix_items.corr()
 
+target_item1 = np.random.choice(price_matrix_items.columns)
+target_item2 = np.random.choice(price_matrix_items.columns)
 start = 20
 market_volatility = volatility_market(price_data, smoothing=start)
 vix_index= market_volatility.iloc[start:].index
@@ -186,6 +194,23 @@ plt.ylabel('Sample Quantiles')
 plt.xlabel('Theoretical Quantiles')
 plt.grid()
 plt.show()
-
-
 # %%
+myplot.plot_features(price_matrix_items[target_item1],start= '2025-05-10',end= '2025-05-11')
+#%% Market Indices
+myplot.plot_features(EQUAL_INDEX)
+#%%
+myplot.plot_features(VPRICE_INDEX)
+# %% Volume History 
+myplot.plot_features(volume_matrix_items[target_item1],start= '2025-05-10',end= '2025-05-11')
+# %% Correlations
+sns.heatmap(price_matrix_items.iloc[:,1:10].corr(), annot=True, cmap='coolwarm', fmt=".2f")
+#%%
+sns.heatmap(volume_matrix_items.iloc[:,15:30].corr(), annot=True, cmap='coolwarm', fmt=".2f")
+#%% Item Beta
+myplot.plot_item_market_divergence(price_matrix_items, 2, market_index_equal_weight)
+#%%
+myplot.plot_item_market_divergence(price_matrix_items, 2, market_index_equal_weight)
+print(f'Beta: {tools.beta(price_matrix_items, target_item1, market_index_equal_weight)}')
+#%% Pair Divergence
+myplot.plot_feature_divergence(price_matrix_items[target_item1], price_matrix_items[target_item2], 'z', window=60,start= '2025-05-10',end= '2025-05-11')
+#%%

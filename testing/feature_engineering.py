@@ -11,8 +11,10 @@ import utils.model_tools as tools
 import utils.plot_tools as myplot
 import utils.data_pipeline as pipeline
 import pytz
+from data.bosstables import bosstables_list as BOSSTABLES_LIST
+import utils.api_fetcher as api
 #%%
-price_data = pipeline.data_preprocess2(read=True, interp_method='linear')
+price_data = pipeline.data_preprocess2(read=True, write=False, interp_method='linear', filter_volume=True)
 price_matrix_items = price_data.pivot(index="timestamp", columns="item_id", values="wprice")
 vol_matrix_items = price_data.pivot(index="timestamp", columns="item_id", values="totalvol")
 volatility_index = pipeline.volatility_market(price_data, smoothing=20)[20:] #LEAKY
@@ -32,39 +34,26 @@ timestamps_unix = price_matrix_items.index
 timestamps_datetime = pd.to_datetime(timestamps_unix, unit='s', utc=True)
 timestamps_datetime_series = pd.Series(timestamps_datetime.values, index=timestamps_datetime)
 
-base_value = 100
-base_prices = price_matrix_items.iloc[0,:]
-price_ratio = price_matrix_items.div(base_prices, axis=1)
-mean_ratio = price_ratio.mean(axis=1) 
-market_index_equal_weight = mean_ratio * base_value
+market_index_volume_weight = tools.create_item_index(
+    [price_matrix_items,vol_matrix_items],
+    list(price_matrix_items.columns),
+    type='vprice',base_value=100)
 
-vprice_matrix = price_matrix_items * vol_matrix_items
-sum_vprice_matrix = vprice_matrix.sum(axis=1)
-vprice_ratio = sum_vprice_matrix/sum_vprice_matrix[0]
-market_index_volume_weight = base_value * vprice_ratio
+market_index_equal_weight = tools.create_item_index(
+    price_matrix_items,
+    list(price_matrix_items.columns),
+    type='equal',base_value=100)
 
 equal_market_item_corr = price_matrix_items.corrwith(market_index_equal_weight)
 vprice_market_item_corr = price_matrix_items.corrwith(market_index_volume_weight)
+
+boss_data = pipeline.data_explicit_preprocess(item for sublist in BOSSTABLES_LIST for item in sublist)
+boss_matrix_items = boss_data.pivot(index="timestamp", columns="item_id", values="wprice")
+
+# bosstables_index_list_vprice = [for list in BOSSTABLES_LIST]
+#indexes for rune,log,herb,food,metal
+
 # %% Price History
-myplot.plot_features(price_matrix_items[target_item1],start= '2025-05-10',end= '2025-05-11')
-#%% Market Indices
-myplot.plot_features(market_index_equal_weight)
-#%%
-myplot.plot_features(market_index_volume_weight)
-# %% Volume History 
-myplot.plot_features(vol_matrix_items[target_item1],start= '2025-05-10',end= '2025-05-11')
-# %% Correlations
-sns.heatmap(price_matrix_items.iloc[:,1:10].corr(), annot=True, cmap='coolwarm', fmt=".2f")
-#%%
-sns.heatmap(vol_matrix_items.iloc[:,15:30].corr(), annot=True, cmap='coolwarm', fmt=".2f")
-#%% Item Beta
-myplot.plot_item_market_divergence(price_matrix_items, 2, market_index_equal_weight)
-#%%
-myplot.plot_item_market_divergence(price_matrix_items, 2, market_index_equal_weight)
-print(f'Beta: {tools.beta(price_matrix_items, target_item1, market_index_equal_weight)}')
-#%% Pair Divergence
-myplot.plot_feature_divergence(price_matrix_items[target_item1], price_matrix_items[target_item2], 'z', window=60,start= '2025-05-10',end= '2025-05-11')
-#%%
 price_corr = price_matrix_items[target_item1].rolling(20).corr(price_matrix_items[target_item2])
 #1-period returns
 returns_item1 = price_matrix_items[target_item1].pct_change()
@@ -75,5 +64,17 @@ returns_item2_hourly = price_matrix_items[target_item2].resample('h').last().pct
 #daily-returns
 returns_item1_daily = price_matrix_items[target_item1].resample('d').last().pct_change()
 returns_item2_daily = price_matrix_items[target_item2].resample('d').last().pct_change()
-
+#cyclical time features
+hour_time_sin = np.sin(price_matrix_items.index.minute*2*np.pi/60)
+hour_time_cos = np.cos(price_matrix_items.index.minute*2*np.pi/60)
+day_time_sin = np.sin(price_matrix_items.index.hour*2*np.pi/24)
+day_time_cos = np.cos(price_matrix_items.index.hour*2*np.pi/24)
+#update info: 6:30 EST every Wednesday
+update_dates = pd.date_range(
+    start='2015-03-28 11:30',
+    end=pd.Timestamp.now(),
+    freq='W-WED', # weekly wednesday
+    tz='Europe/London' # Specify the British timezone
+).tz_convert('US/Eastern') #back to EST
 # %%
+
