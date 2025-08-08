@@ -4,11 +4,23 @@ import numpy as np
 from typing import List
 
 def data_explicit_preprocess(
-    items:          List[int],
-    file_path:      str = '../data/data.csv', 
-    interp_method:  str = 'linear', 
+    items:          list,
+    read_path:      str|None = None,
+    file_path:      str = '../data/data.csv',
+    write:          bool = False,
+    interp_method:  str = 'linear' 
 ) -> pd.DataFrame:
-    raw_pricedata = pd.read_csv(
+    if type(read_path) is str:
+        preprocessed_pricedata = pd.read_csv(
+                f'{read_path}', 
+                names = [
+                    'item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice',
+                    'lowPriceVolume', 'timestamp', 'totalvol', 'wprice'      
+                    ]
+                )
+        return preprocessed_pricedata
+
+    raw_pricedata =  pd.read_csv(
             f'{file_path}', 
             names = [
                 'item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice',
@@ -90,6 +102,9 @@ def data_explicit_preprocess(
     final_columns_order = ['timestamp', 'item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'totalvol', 'wprice']
     processed_priced_data = processed_priced_data[final_columns_order]
     
+    if write:
+        processed_priced_data.to_csv('../data/processed_explicit.csv',mode='w', header=False, index=False)
+
     return processed_priced_data
 
 
@@ -107,7 +122,7 @@ def data_preprocess2(
     write:              bool = False, 
     interp_method:      str = 'linear', 
     filter_volume:      bool = True,
-    filter_threshold:   int = 0.99
+    filter_threshold:   float = 0.99
 ) -> pd.DataFrame:
    
     if read:

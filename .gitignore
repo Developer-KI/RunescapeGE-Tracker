@@ -8,3 +8,4 @@ data/data_properties.txt
 testing/model_testing.py
 snippets
 bossnames.txt
+data/processed_explicit.csv
