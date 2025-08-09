@@ -1,19 +1,19 @@
 #%%
-import os
-import sys
+import  os
+import  sys
 project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
 if project_root not in sys.path: sys.path.append(project_root)
-import numpy as np
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import utils.model_tools as tools
-import utils.plot_tools as myplot
-import utils.data_pipeline as pipeline
-import pytz
-from data.bosstables import bosstables_list as BOSSTABLES_LIST
-import utils.api_fetcher as api
-from utils.announcements_fetcher import get_announcements
+import  numpy as np
+import  pandas as pd
+import  seaborn as sns
+import  matplotlib.pyplot as plt
+import  utils.model_tools as tools
+import  utils.plot_tools as myplot
+import  utils.data_pipeline as pipeline
+import  pytz
+from    data.bosstables import bosstables_list as BOSSTABLES_LIST
+import  utils.api_fetcher as api
+from    utils.announcements_fetcher import get_announcements, get_announcements_new
 #%%
 price_data = pipeline.data_preprocess2(read=True, write=False, interp_method='linear', filter_volume=True)
 price_matrix_items = price_data.pivot(index="timestamp", columns="item_id", values="wprice")
@@ -48,14 +48,15 @@ market_index_equal_weight = tools.create_item_index(
 equal_market_item_corr = price_matrix_items.corrwith(market_index_equal_weight)
 vprice_market_item_corr = price_matrix_items.corrwith(market_index_volume_weight)
 
+boss_ids= set([item for sublist in BOSSTABLES_LIST for item in sublist]) #set conversion drops dupelicates
 boss_data = pipeline.data_explicit_preprocess( #refine argument handling
-    [item for sublist in BOSSTABLES_LIST for item in sublist],
-    write=True
+    boss_ids, 
+    read_path='../data/processed_bosstables.csv'
     )
 boss_matrix_items = boss_data.pivot(index="timestamp", columns="item_id", values="wprice")
 boss_matrix_items.index = pd.to_datetime(boss_matrix_items.index, unit='s')
 
-# bosstables_index_list_vprice = [for list in BOSSTABLES_LIST]
+#bosstables_index_list_vprice = [for list in BOSSTABLES_LIST]
 #indexes for rune,log,herb,food,metal
 
 # %% Price History
@@ -82,6 +83,5 @@ update_dates = pd.date_range(
     tz='Europe/London' # Specify the British timezone
 ).tz_convert('US/Eastern') #back to EST
 
-update_announcements = get_announcements(scrape=False)
+update_announcements = get_announcements()
 # %%
-

@@ -6,7 +6,7 @@ import scipy.stats as stats
 import os
 from   matplotlib.ticker import MaxNLocator, ScalarFormatter
 import utils.model_tools as tools
-from   utils.data_pipeline import alchemy_preprocess, data_preprocess 
+from   utils.data_pipeline import alchemy_preprocess, data_preprocess2 
 from   sklearn.metrics import mean_absolute_error
 from   matplotlib.gridspec import GridSpec
 from   statsmodels.tsa.api import SimpleExpSmoothing
@@ -152,7 +152,7 @@ def plot_recent_alch_vs_price(item_id: int) -> None:
     reference = alchemy_preprocess(read=True)
 
     if item_id in reference.index:
-        df = data_preprocess(read=True)
+        df = data_preprocess2()
         df = df.pivot(index="timestamp", columns="item_id", values="wprice")[item_id]
         plt.figure(figsize=(10, 5))
         plt.plot(pd.to_datetime(df.index, unit='s'), df.values, marker="o", markersize='2', linestyle="-", label=f"{reference.loc[item_id,'item']} Price")

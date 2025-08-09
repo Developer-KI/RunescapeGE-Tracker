@@ -5,14 +5,15 @@ import  utils.api_fetcher as fetcher
 import  scipy.stats as stats
 import  os
 from    matplotlib.ticker import MaxNLocator, ScalarFormatter
-from    utils.data_pipeline import alchemy_preprocess, data_preprocess 
+from    utils.data_pipeline import alchemy_preprocess
 from    sklearn.metrics import mean_absolute_error
 from    matplotlib.gridspec import GridSpec
 from    statsmodels.tsa.api import SimpleExpSmoothing
 from    scipy.stats import norm, kurtosis, skew, shapiro, jarque_bera
-from    typing import TypeVar, cast
+from    typing import TypeVar, cast, Dict
 from    datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
+import json
 
 print(os.getcwd())
 # plt.rcParams.update({
@@ -39,29 +40,48 @@ plt.rcParams.update({
 
 })
 
-read = pd.read_csv('../data/alchemy_data.csv', header=None)
-##
-EXCEPTIONS = {
-    13190: 'Bond',
-    23064: 'Jar of Chemicals',
-}
+with open('../data/nameID.json', 'r') as file:
+    name_to_id: Dict[str, int] = json.load(file)
 
-def item_name(id: int | str) -> str | int:
-    if type(id) is int:
-        if id in EXCEPTIONS:
-            return EXCEPTIONS[id]
-        else:
-            return read.loc[read[0] == id, 1].item()
-    
-    elif type(id) is str:
-        #inverse mapping lookup
-        inverse_exceptions = {v: k for k, v in EXCEPTIONS.items()}
-        if id in inverse_exceptions:
-            return inverse_exceptions[id]
-        else:
-            return read.loc[read[1] == id, 0].item()
+# Create the inverted dictionary for reverse lookups (also run only once)
+id_to_name: Dict[int, str] = {value: key for key, value in name_to_id.items()}
 
-    else: raise ValueError("Item lookup error")
+# --- Step 2: Create a Fast Lookup Function ---
+
+def item_name(query: int|str) -> str|int:
+    """
+    Performs a fast, bi-directional lookup using pre-built dictionaries.
+    """
+    if isinstance(query, int):
+        if query in id_to_name:
+            return id_to_name.get(query)
+        else: raise ValueError(f"ID '{query}' not found.")
+    elif isinstance(query, str):
+        if query in name_to_id:
+            return name_to_id.get(query)
+        else: raise ValueError(f"Name '{query}' not found.")
+    else: raise ValueError("Input must be integer ID or string name")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def target_time_features(y:pd.DataFrame, feature_col:str, time_feature:int = 2) -> pd.DataFrame:
     data = y.copy()

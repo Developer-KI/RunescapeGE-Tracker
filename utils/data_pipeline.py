@@ -7,18 +7,21 @@ def data_explicit_preprocess(
     items:          list,
     read_path:      str|None = None,
     file_path:      str = '../data/data.csv',
-    write:          bool = False,
+    write_name:     str|None = None,
     interp_method:  str = 'linear' 
 ) -> pd.DataFrame:
     if type(read_path) is str:
         preprocessed_pricedata = pd.read_csv(
                 f'{read_path}', 
                 names = [
-                    'item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice',
-                    'lowPriceVolume', 'timestamp', 'totalvol', 'wprice'      
-                    ]
-                )
+                'timestamp', 'item_id', 'avgHighPrice', 'highPriceVolume',
+                'avgLowPrice', 'lowPriceVolyme', 'totalvol', 'wprice'
+                ]
+            )
+        print(f"Successfully loaded processed data from {read_path}")
         return preprocessed_pricedata
+
+    elif not isinstance(read_path, (str, type(None))): raise ValueError("Argument read_path should be of None or string") 
 
     raw_pricedata =  pd.read_csv(
             f'{file_path}', 
@@ -46,35 +49,35 @@ def data_explicit_preprocess(
     full_df = pd.DataFrame(index=full_index).reset_index()
 
     # Merge the raw data onto the full grid, introducing NaNs for missing combinations
-    processed_priced_data = pd.merge(full_df, raw_pricedata, on=['timestamp', 'item_id'], how='left')
+    processed_pricedata = pd.merge(full_df, raw_pricedata, on=['timestamp', 'item_id'], how='left')
 
-    print(f"\nNaNs after creating full grid and left merging (expected for initially missing combos):\n{processed_priced_data.isnull().sum()}")
+    print(f"\nNaNs after creating full grid and left merging (expected for initially missing combos):\n{processed_pricedata.isnull().sum()}")
 
     # Fill NA volumes with 0 prior to calculation to avoid NaN propagation
-    processed_priced_data['highPriceVolume'] = processed_priced_data['highPriceVolume'].fillna(0)
-    processed_priced_data['lowPriceVolume'] = processed_priced_data['lowPriceVolume'].fillna(0)
+    processed_pricedata['highPriceVolume'] = processed_pricedata['highPriceVolume'].fillna(0)
+    processed_pricedata['lowPriceVolume'] = processed_pricedata['lowPriceVolume'].fillna(0)
     
-    processed_priced_data['totalvol'] = processed_priced_data['highPriceVolume'] + processed_priced_data['lowPriceVolume']
+    processed_pricedata['totalvol'] = processed_pricedata['highPriceVolume'] + processed_pricedata['lowPriceVolume']
 
     # Temporarily fill avgHighPrice/avgLowPrice for 'wprice' calculation if they are NaN at this stage.
     # We use grouped forward fill (ffill) to prevent data leakage and ensure that
     # price calculations only use information from the past.
-    processed_priced_data['avgHighPrice_calc'] = processed_priced_data.groupby('item_id')['avgHighPrice'].transform(lambda x: x.ffill())
-    processed_priced_data['avgLowPrice_calc'] = processed_priced_data.groupby('item_id')['avgLowPrice'].transform(lambda x: x.ffill())
+    processed_pricedata['avgHighPrice_calc'] = processed_pricedata.groupby('item_id')['avgHighPrice'].transform(lambda x: x.ffill())
+    processed_pricedata['avgLowPrice_calc'] = processed_pricedata.groupby('item_id')['avgLowPrice'].transform(lambda x: x.ffill())
 
     # Calculate 'wprice' (weighted price).
     # Use np.where to handle division by zero safely: if 'totalvol' is 0, 'wprice' is NaN.
     # Otherwise, calculate 'wprice' based on volumes and average prices.
-    processed_priced_data['wprice'] = np.where( # Use np.where
-        processed_priced_data['totalvol'] == 0,
+    processed_pricedata['wprice'] = np.where( # Use np.where
+        processed_pricedata['totalvol'] == 0,
         np.nan, # Use np.nan for explicit missing values
-        (processed_priced_data['highPriceVolume'] / processed_priced_data['totalvol']) * \
-        (processed_priced_data['avgHighPrice_calc'] - processed_priced_data['avgLowPrice_calc']) + \
-        processed_priced_data['avgLowPrice_calc']
+        (processed_pricedata['highPriceVolume'] / processed_pricedata['totalvol']) * \
+        (processed_pricedata['avgHighPrice_calc'] - processed_pricedata['avgLowPrice_calc']) + \
+        processed_pricedata['avgLowPrice_calc']
     )
     
     # Drop the temporary calculation columns
-    processed_priced_data.drop(columns=['avgHighPrice_calc', 'avgLowPrice_calc'], inplace=True)
+    processed_pricedata.drop(columns=['avgHighPrice_calc', 'avgLowPrice_calc'], inplace=True)
 
     # --- Step 3: Grouped Interpolation (forward-only) and Forward Fill for all relevant columns ---
     print("\nStarting grouped forward-only interpolation and forward fills...")
@@ -87,33 +90,25 @@ def data_explicit_preprocess(
     for col in cols_to_fill:
         # Interpolate missing values within each item_id group, looking only forward.
         # Then, ffill any remaining NaNs (especially leading ones or those after interpolation)
-        processed_priced_data[col] = processed_priced_data.groupby('item_id')[col].transform(
+        processed_pricedata[col] = processed_pricedata.groupby('item_id')[col].transform(
             lambda x: x.interpolate(method=interp_method, limit_direction='forward').ffill()
         )
 
     # Final global ffill: A safety net for any remaining NaNs that might occur at the very beginning
     # of the dataset where a grouped ffill might not have a preceding value.
-    processed_priced_data.ffill(inplace=True)
+    processed_pricedata.ffill(inplace=True)
 
-    print(f"\nNaNs after grouped forward-only interpolation and forward fills: \n{processed_priced_data.isnull().sum()}")
-    print(f"Total NaNs in processed_priced_data (may be non-zero for leading NaNs): {processed_priced_data.isnull().sum().sum()}")
+    print(f"\nNaNs after grouped forward-only interpolation and forward fills: \n{processed_pricedata.isnull().sum()}")
+    print(f"Total NaNs in processed_pricedata (may be non-zero for leading NaNs): {processed_pricedata.isnull().sum().sum()}")
     
     # Reorder columns to ensure consistent output structure, especially for saving and future reading
     final_columns_order = ['timestamp', 'item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'totalvol', 'wprice']
-    processed_priced_data = processed_priced_data[final_columns_order]
+    processed_pricedata = processed_pricedata[final_columns_order]
     
-    if write:
-        processed_priced_data.to_csv('../data/processed_explicit.csv',mode='w', header=False, index=False)
-
-    return processed_priced_data
-
-
-
-
-
-
-
-
+    if type(write_name) is str:
+        processed_pricedata.to_csv(f'../data/{write_name}',mode='w', header=False, index=False)
+    else: raise ValueError("Argument write_name should be type string or None")
+    return processed_pricedata
 
 def data_preprocess2(
     read:               bool = True, 
@@ -255,46 +250,6 @@ def data_preprocess2(
     if write:
         processed_priced_data.to_csv(f'{filepath}/processed_data.csv', mode='w', header=False, index=False)
         print(f"Processed data saved to {filepath}/processed_data.csv")
-    
-    return processed_priced_data
-
-def data_preprocess(read: bool, filepath: str = "../data", read_path: str = "../data/processed_data.csv", write: bool = False, interp_method: str = 'linear') -> pd.DataFrame:
-    ### Read has higher priority than write
-    if read:
-        df = pd.read_csv(
-            f'{read_path}',
-            names=[
-                'item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice',
-                'lowPriceVolume', 'timestamp', 'totalvol', 'wprice'
-            ]
-        )
-        return df
-
-    #Load the data
-    raw_pricedata = pd.read_csv(f'{filepath}/data.csv', names=['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp'])
-    #Load the data properties
-    with open(f'{filepath}/data_properties.txt', "r") as file:
-        lines = file.readlines()
-        file.close()
-    series_length = int(lines[1].replace("\n", ""))
-
-    #Keep constantly only constantly traded items
-    group_raw_pricedata = raw_pricedata.groupby('item_id').nunique()
-    filtered_indexes = group_raw_pricedata[group_raw_pricedata['timestamp'] < 0.99*series_length].index #filter out lower volume items
-    raw_pricedata = raw_pricedata[~raw_pricedata['item_id'].isin(filtered_indexes)]
-    
-    print(f"\nAfter filtering: {len(raw_pricedata['item_id'].unique())} item(s) remaining.")
-
-    # interpolate missing values
-    processed_priced_data = raw_pricedata.interpolate(method=interp_method)
-    
-    #Weighted average of High/Low Price by High/Low Volume
-    processed_priced_data['totalvol'] = processed_priced_data['highPriceVolume'] + processed_priced_data['lowPriceVolume']
-    processed_priced_data['wprice'] = (processed_priced_data['highPriceVolume']/processed_priced_data['totalvol']) * (processed_priced_data['avgHighPrice'] - processed_priced_data['avgLowPrice']) + processed_priced_data['avgLowPrice']
-
-    #Saving output
-    if write:
-        processed_priced_data.to_csv(f'{filepath}/processed_data.csv', mode='w', header=False, index=False)
     
     return processed_priced_data
 

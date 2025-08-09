@@ -1,16 +1,14 @@
 #%%
-import pandas as pd
-import numpy as np
-import requests
-import sys
-import os
+import  pandas as pd, numpy as np
+import  sys,os
 project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
 if project_root not in sys.path: sys.path.append(project_root)
-from bs4 import BeautifulSoup
-from datetime import date
-import time
-import random 
-from typing import List
+import  requests
+from    bs4 import BeautifulSoup
+from    datetime import date
+import  time
+import  random 
+from    typing import List
 #%%
 
 
@@ -109,10 +107,11 @@ def get_announcements_new(months_ago: int|None = None, years_ago: int|None = Non
 
     return timestamp_list
 
-def get_announcements(cache_file_path='../data/announcements_cache.csv', scrape: bool = True) -> pd.DataFrame:
+def get_announcements(cache_file_path='../data/announcements_cache.csv', scrape: bool = False) -> pd.DataFrame:
     """
     Handles caching logic for the get_announcements function.
     Reads from cache if available, appends new data, and saves.
+    Use a VPN with this function.
     """
     
     # Check if a cache file exists
@@ -141,9 +140,11 @@ def get_announcements(cache_file_path='../data/announcements_cache.csv', scrape:
             # Append and save the combined data
             combined_df = pd.concat([cached_df, new_df]).drop_duplicates().sort_values(by='timestamp').reset_index(drop=True)
             combined_df.to_csv(cache_file_path, index=False)
+            print("Done!")
 
             return combined_df
         else:
+            print("Done!")
             return cached_df 
     
     else:
@@ -153,6 +154,7 @@ def get_announcements(cache_file_path='../data/announcements_cache.csv', scrape:
         full_df = pd.DataFrame(full_timestamps, columns=['timestamp'])
         
         full_df.to_csv(cache_file_path, index=False)
+        print("Done!")
         
         return full_df
 #%%
