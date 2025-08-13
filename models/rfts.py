@@ -5,6 +5,7 @@ from   sklearn.ensemble import RandomForestRegressor
 from   sklearn.model_selection import TimeSeriesSplit
 from   sklearn.metrics import mean_absolute_error
 from   utils import model_tools as tools
+import utils.outlier_detection as outlier
 from   statsmodels.tsa.stattools import adfuller
 from   typing import Literal
 #from   scipy.stats import boxcox
@@ -23,13 +24,14 @@ def train_rfts_model(
     max_features:       float | Literal['sqrt', 'log2'] = 'sqrt',
     max_depth:          int = 10,
 ) -> tuple:
-    dtype = 'float32'
     
-    full_x, full_y = tools.prep_tree_model(data, target_col, holdout)
-    train_x = data.drop(target_col, axis=1).iloc[:-holdout].to_numpy(dtype=dtype)
-    train_y = data[target_col].iloc[:-holdout].to_numpy(dtype=dtype)
+    full_x, full_y, train_x, train_y = tools.prep_tree_model(data, target_col, holdout)
 
     tscv = TimeSeriesSplit(n_splits=time_splits)
+    
+    train_cv_mase=[]
+    train_cv_mae=[]
+    
     cv_mase=[]
     cv_mae=[]
     cv_da=[]
@@ -41,14 +43,27 @@ def train_rfts_model(
         X_train_cv, X_test_cv = train_x[train_idx,:], train_x[test_idx,:]
         y_train_cv, y_test_cv = train_y[train_idx], train_y[test_idx]
 
-        model_cv = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, min_samples_split=min_samples_split, min_samples_leaf=min_samples_leaf, max_features=max_features, n_jobs=-1)
+        model_cv = RandomForestRegressor(
+            n_estimators=n_estimators, 
+            max_depth=max_depth, 
+            min_samples_split=min_samples_split, 
+            min_samples_leaf=min_samples_leaf, 
+            max_features=max_features, 
+            n_jobs=-1
+            )
         model_cv.fit(X_train_cv, y_train_cv) 
+        
         preds_cv = model_cv.predict(X_test_cv)
-
         model_mase = tools.mase(y_test_cv, preds_cv, y_train_cv,1)
         model_mae= mean_absolute_error(y_test_cv,preds_cv)
         cv_mase.append(model_mase)
         cv_mae.append(model_mae)
+        
+        preds_train_cv = model_cv.predict(X_train_cv)
+        model_train_mase = tools.mase(y_train_cv, preds_train_cv, y_train_cv,1)
+        model_train_mae= mean_absolute_error(y_train_cv,preds_train_cv)
+        train_cv_mase.append(model_train_mase)
+        train_cv_mae.append(model_train_mae)
 
         if len(y_test_cv) > 0 and len(y_train_cv) > 0: # Ensure there's data to calculate direction
             last_actual_in_train_cv = y_train_cv[-1]
@@ -79,7 +94,7 @@ def train_rfts_model(
         
         final_preds_holdout = best_model.predict(x_holdout)
         
-        return best_model, final_preds_holdout, final_train_Y, cv_mae, cv_mase, cv_da
+        return best_model, final_preds_holdout, final_train_Y, cv_mae, cv_mase, cv_da, train_cv_mae, train_cv_mase
     else:
         raise Exception("Failed to choose model.")
 
@@ -88,6 +103,9 @@ def RFTS(
     target_col:         str,
     holdout:            int,
     outlier_threshold:  float = 2,
+    outlier_window:     int = 20,
+    detection:          str = 'ewm',
+    ewm_bounds:         list[float]|None = None,
     time_splits:        int = 5,
     min_samples_leaf:   int = 5,
     min_samples_split:  int = 5,
@@ -96,10 +114,27 @@ def RFTS(
     max_depth:          int = 10
 ) -> tuple:
     
-    full_x, full_y = tools.prep_tree_model(data, target_col, holdout)
-    y_holdout = full_y.iloc[-holdout:].to_numpy(dtype='float32')
+    full_y = data[target_col]
+    
+    if detection=='rolling-z':
+        outliers = outlier.rolling_zscore(full_y, outlier_window, outlier_threshold)
+        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
+    elif detection=='iqr':
+        outliers = outlier.iqr(full_y, outlier_threshold)
+        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
+    elif detection=='ewm' and ewm_bounds is not None:
+        ewm_bounds_percentage_lower = 1-ewm_bounds[0]
+        ewm_bounds_percentage_upper = 1+ewm_bounds[1]
+        outliers = outlier.ewm(full_y, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper)
+        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
+    elif detection is not None and not isinstance(detection, str):
+        raise ValueError("Outlier parameter must be of string type")
+    else: raise ValueError("Selection error")
 
-    best_model, final_preds_holdout, final_train_Y, cv_mae, cv_mase, cv_da = train_rfts_model(
+    full_y_filtered = full_y.drop(outliers.index)    
+    y_holdout = full_y_filtered.iloc[-holdout:].to_numpy(dtype='float32')
+
+    best_model, final_preds_holdout, final_train_Y, cv_mae, cv_mase, cv_da, train_cv_mae, train_cv_mase  = train_rfts_model(
         data, 
         target_col, 
         holdout, 
@@ -110,12 +145,9 @@ def RFTS(
         max_features, 
         max_depth
         )
+    
     final_holdout_mae, final_holdout_mase, final_holdout_da = tools.score_tree_model(full_y, holdout, y_holdout, final_preds_holdout, final_train_Y)
     
-    window_size = 20
-    outliers = tools.outlier_detection(best_model, full_y, full_x, window_size, outlier_threshold)
-
-    print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
     print(f"Cross-validated MASE: {np.mean(cv_mase):.4f} (±{np.std(cv_mase):.4f})")
     print(f"Cross-validated MAE: {np.mean(cv_mae):.4f} (±{np.std(cv_mae):.4f})")
     print(f"Cross-validated DA: {np.nanmean(cv_da):.2f}% (±{np.nanstd(cv_da):.2f})") # Use nanmean/nanstd to handle NaNs
@@ -126,8 +158,9 @@ def RFTS(
     print(f"Final Holdout MASE: {final_holdout_mase:.4f}")
     print(f"Final Holdout MAE: {final_holdout_mae:.4f}")
     print(f"Final Holdout Directional Accuracy: {final_holdout_da:.2f}%")
-
-    return best_model, final_preds_holdout, outliers
+    if detection is not None and isinstance(detection,str):
+        return best_model, final_preds_holdout, outliers, cv_mae, cv_mase, train_cv_mae, train_cv_mase
+    else: return best_model, final_preds_holdout, cv_mae, cv_mase, train_cv_mae, train_cv_mase
         
 def RFTSOptim(data:pd.DataFrame,target_col:str, holdout:int,n_trials:int=30,pruner:bool=True,meta_weight=False)-> tuple:
     X = data.drop(target_col, axis=1).iloc[:-holdout].to_numpy(dtype="float32")

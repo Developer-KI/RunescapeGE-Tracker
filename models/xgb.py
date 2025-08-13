@@ -101,7 +101,9 @@ def XGB(
     data:pd.DataFrame,
     target_col:str, 
     holdout:int, 
-    outlier_threshold:float=0.2, 
+    outlier_threshold:  float = 2,
+    outlier_window:     int = 20,
+    detection:          str = 'rolling-z',
     n_estimators:int=200, 
     time_splits:int=5, 
     max_depth:int=5, 
@@ -127,22 +129,32 @@ def XGB(
         min_child_weight
         )
     final_holdout_mae, final_holdout_mase, final_holdout_da = tools.score_tree_model(full_y, holdout, y_holdout, final_preds_holdout, final_train_Y)
-    
-    window_size = 20
-    outliers = tools.outlier_detection(best_model, full_y, full_x, window_size, outlier_threshold)
+    if detection=='rolling-mad':
+        outliers = tools.rolling_median_average_deviation(best_model, full_y, full_x, outlier_window, outlier_threshold)
+        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
+    elif detection=='rolling-z':
+        outliers = tools.rolling_zscore(full_y, outlier_window, outlier_threshold)
+        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
+    elif detection=='iqr':
+        outliers = tools.iqr_outlier(full_y, outlier_threshold)
+        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
+    elif detection is not None and not isinstance(detection, str):
+        raise ValueError("Outlier parameter must be of string type")
+    else: print("No detection selected")
 
-    print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
     print(f"Cross-validated MASE: {np.mean(cv_mase):.4f} (±{np.std(cv_mase):.4f})")
     print(f"Cross-validated MAE: {np.mean(cv_mae):.4f} (±{np.std(cv_mae):.4f})")
     print(f"Cross-validated DA: {np.nanmean(cv_da):.2f}% (±{np.nanstd(cv_da):.2f})") # Use nanmean/nanstd to handle NaNs
-    
+
+    #*** recursive unimplented***
+
     print('--------------------------')
     print(f"Final Holdout MASE: {final_holdout_mase:.4f}")
     print(f"Final Holdout MAE: {final_holdout_mae:.4f}")
     print(f"Final Holdout Directional Accuracy: {final_holdout_da:.2f}%")
-
-    return best_model, final_preds_holdout, outliers
-    
+    if detection is not None and isinstance(detection,str):
+        return best_model, final_preds_holdout, outliers
+    else: return best_model, final_preds_holdout
 def XGBOptim(
     data:pd.DataFrame,
     target_col:str, 

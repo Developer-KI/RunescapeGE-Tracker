@@ -1,18 +1,18 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import utils.api_fetcher as fetcher
-import scipy.stats as stats
-import os
-from   matplotlib.ticker import MaxNLocator, ScalarFormatter
-import utils.model_tools as tools
-from   utils.data_pipeline import alchemy_preprocess, data_preprocess2 
-from   sklearn.metrics import mean_absolute_error
-from   matplotlib.gridspec import GridSpec
-from   statsmodels.tsa.api import SimpleExpSmoothing
-from   scipy.stats import norm, kurtosis, skew, shapiro, jarque_bera
-import pytz
-
+import  pandas as pd
+import  numpy as np
+import  matplotlib.pyplot as plt
+import  utils.api_fetcher as fetcher
+import  scipy.stats as stats
+import  os
+from    matplotlib.ticker import MaxNLocator, ScalarFormatter
+import  utils.model_tools as tools
+from    utils.data_pipeline import alchemy_preprocess, data_preprocess2 
+from    sklearn.metrics import mean_absolute_error
+from    matplotlib.gridspec import GridSpec
+from    statsmodels.tsa.api import SimpleExpSmoothing
+from    scipy.stats import norm, kurtosis, skew, shapiro, jarque_bera
+import  pytz
+from    typing import cast
 print(os.getcwd())
 # plt.rcParams.update({
 #     'axes.facecolor': '#2E2E2E',
@@ -36,7 +36,16 @@ plt.rcParams.update({
     "legend.labelcolor": "#A1A1A1",
     "axes.titlecolor": "#A1A1A1"
 })
-def daytime_shade(feature_for_index:pd.Series, time_start:str = '11:00:00', time_end:str = '20:00:00') -> None:
+
+_DEFAULT_TITLE = object()
+
+def daytime_shade(
+        feature_for_index:  pd.Series, 
+        time_start:         str = '11:00:00', 
+        time_end:           str = '20:00:00', 
+        plot_type:          plt.Axes|None = None
+) -> None:
+    
     dates = feature_for_index.index.date
     unique_dates = pd.to_datetime(pd.Series(dates).unique())
     
@@ -44,67 +53,85 @@ def daytime_shade(feature_for_index:pd.Series, time_start:str = '11:00:00', time
         # Define the day period for first day (e.g., 11 AM to 8 PM)
         day_start = pd.Timestamp(f"{date} {time_start}")
         day_end = pd.Timestamp(f"{date} {time_end}")
-        plt.axvspan(day_start, day_end, color='gray', alpha=0.2, zorder=0)
+        if plot_type is not None:
+           plot_type.axvspan(day_start, day_end, color='gray', alpha=0.2, zorder=0)
+        else:
+            plt.axvspan(day_start, day_end, color='gray', alpha=0.2, zorder=0)
 
 def plot_features(
-    y:       pd.Series|None = None, 
-    x:       pd.Series|None = None, 
-    start:   str|None = None,
-    end:     str|None = None,
-    xlab:    str = "X",
-    ylab:    str = "Y",
-    title:   str = "X against Y", 
-) -> None: 
-
-    plt.figure(figsize=(10, 5))
+    y:      pd.Series | None = None,
+    x:      pd.Series | None = None,
+    start:  str | None = None,
+    end:    str | None = None,
+    xlab:   str = "X",
+    ylab:   str = "Y",
+    title:  str|object = _DEFAULT_TITLE,
+    show:   bool = False #currently useless for interactive mode/Jupyter type environments
+) -> tuple[plt.Figure, plt.Axes]: # Explicitly return the plot objects
+    
+    fig, ax = plt.subplots(figsize=(10, 5))
+    y_slice = y.loc[start:end]
 
     if x is None and y is None:
         raise ValueError("Input x or y data")
     elif x is not None and y is None:
         raise ValueError("x arguments require a y argument")
-    elif x is not None and y is not None:
-        y = tools.ensure_datetime_index(y)
-        y_slice = y.loc[start:end]
-        x = tools.ensure_datetime_index(x)
-        x_slice = x.loc[start:end]
-        plt.plot(x_slice, y_slice)
-        plt.title(title)
-        plt.xlabel(xlab)
-    elif x is None and y is not None: 
-        y = tools.ensure_datetime_index(y)
-        y_slice = y.loc[start:end]
-        plt.plot(y_slice)
-        plt.title("Y Over Time")
-        daytime_shade(y_slice)   
-    plt.ylabel(ylab)
+    
+    y_slice = tools.ensure_datetime_index(y).loc[start:end]
+
+    if x is not None:
+        x_slice = tools.ensure_datetime_index(x).loc[start:end]
+        ax.plot(x_slice, y_slice)
+        ax.set_xlabel(xlab)
+        title_to_use: str = "X against Y" if title is _DEFAULT_TITLE else cast(str, title)
+    else:
+        ax.plot(y_slice)
+        title_to_use: str = "Y Over Time" if title is _DEFAULT_TITLE else cast(str, title)
+        daytime_shade(y_slice)
+    
+    ax.set_title(title_to_use)
+    ax.set_ylabel(ylab)
     plt.xticks(rotation=45)
-    plt.grid()
-    plt.show()
+    ax.grid()
+    if show:
+        plt.show()
+
+    return fig, ax
 
 def plot_item_market_divergence(
     data:           pd.DataFrame,
     item:           int,
     market_index:   pd.Series,
+    return_periods: int|None = 1,
     start:          str|None = None,
     end:            str|None = None,
-) -> None: 
+    show:           bool = False
+) -> tuple[plt.Figure, plt.Axes]: 
 
-    plt.figure(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(10,5))
     
     market_index = tools.ensure_datetime_index(market_index)
     market_index_slice = market_index.loc[start:end]
     timestamp_slice = market_index.index[start:end]
+    if return_periods is None or return_periods == 1 :
+        market_returns = market_index_slice.pct_change().dropna()
+        item_returns = data[item].pct_change().dropna()
+    elif return_periods > 1: 
+        market_returns = tools.calculate_returns(market_index_slice, return_periods=return_periods)
+        item_returns = tools.calculate_returns(market_index_slice, return_periods=return_periods)
+    else: raise ValueError('Valid return period required')
     
-    market_returns = market_index_slice.pct_change()
-    item_returns = data[item].pct_change()
-    excess_returns = market_returns-item_returns
+    return_diff = market_returns-item_returns
     daytime_shade(market_index_slice)
-    plt.plot(timestamp_slice, excess_returns)
-    plt.title(f"{tools.item_name(item)} Percent Divergence Against Index")
-    plt.ylabel("% Difference")
+    ax.plot(return_diff)
+    ax.set_title(fr"$\mathbf{{{tools.item_name(item)}}}$ [{item}] Percent Divergence Against Index") #add dynamic index name (based on var name)
+    
+    ax.set_ylabel("% Difference")
+    ax.grid()
     plt.xticks(rotation=45)
-    plt.grid()
-    plt.show()
+    if show:
+        plt.show()
+    return fig, ax
 
 def plot_feature_divergence(
     feature1:   pd.Series,
@@ -112,9 +139,11 @@ def plot_feature_divergence(
     type:       str,
     start:      str|None = None,
     end:        str|None = None,
-    window:     int|None = None
-) -> None:
-    plt.figure(figsize=(10, 5)) 
+    window:     int|None = None,
+    show:       bool = False
+) -> tuple[plt.Figure, plt.Axes]: # Explicitly return the plot objects
+    
+    fig, ax = plt.subplots(figsize=(10,5))
     
     feature1 = tools.ensure_datetime_index(feature1)
     feature2 = tools.ensure_datetime_index(feature2)
@@ -126,27 +155,28 @@ def plot_feature_divergence(
         feature1_pct = feature1_slice.pct_change()
         feature2_pct = feature2_slice.pct_change()
         feature_pct_diff = feature1_pct-feature2_pct
-        plt.plot(feature_pct_diff)
-        plt.title("Percent Divergence")
-        plt.ylabel("% Difference")
+        ax.plot(feature_pct_diff)
+        ax.set_title("Percent Divergence")
+        ax.set_ylabel("% Difference")
     elif type == 'raw':
-        plt.plot(feature1_slice-feature2_slice)
-        plt.title("Raw Divergence")
-        plt.ylabel("Difference")
+        ax.plot(feature1_slice-feature2_slice)
+        ax.set_title("Raw Divergence")
+        ax.set_ylabel("Difference")
     elif type == 'z':
         if window is None:
             raise ValueError("Select rolling window size")
         rolling_z = tools.spread_rolling_z(feature1_slice, feature2_slice, window)
-        plt.plot(rolling_z)
-        plt.title("Standardized Divergence")
-        plt.ylabel("z-score")
+        ax.plot(rolling_z)
+        ax.set_title("Standardized Divergence")
+        ax.set_ylabel("z-score")
     else: raise ValueError('Select a valid divergence type')
-
-  
     daytime_shade(feature1_slice)
+    ax.grid()
     plt.xticks(rotation=45)
-    plt.grid()
-    plt.show()
+    if show:
+        plt.show()
+    return fig, ax
+
 
 def plot_recent_alch_vs_price(item_id: int) -> None:
     reference = alchemy_preprocess(read=True)
@@ -241,7 +271,7 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
         Y=Y.ffill().to_numpy()
     else:
             Y = data[data.columns[0]].to_numpy()
-    item = data.columns[0]
+    item = int(data.columns[0])
     # Preserve original timestamps for plotting
     time_index = data.index.to_numpy()  
 
@@ -319,8 +349,8 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
         
         # **Row 3: Histogram of Residuals (Separate Plot)**
         ax_hist = fig.add_subplot(gs[2, 0]) 
-        hist_min= np.percentile(residuals_holdout_for_plot,0.5) 
-        hist_max= np.percentile(residuals_holdout_for_plot,99.5)
+        hist_min= np.nanpercentile(residuals_holdout_for_plot,0.5) 
+        hist_max= np.nanpercentile(residuals_holdout_for_plot,99.5)
         ax_hist.hist(residuals_holdout_for_plot, bins=30, color='skyblue', edgecolor='black', alpha=0.7, range=(hist_min,hist_max), density=True)
         ax_hist.axvline(0, color='white', linestyle='--', linewidth=1)
 
@@ -372,6 +402,7 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
         ax_hist.hist(residuals, bins=30, color='skyblue', edgecolor='black', alpha=0.7)
 
     #Main Plot
+    daytime_shade(data.iloc[-lookback:], plot_type=ax_main)
     ax_main.set_ylabel("GP Price")
     ax_main.set_title(fr"$\mathbf{{{tools.item_name(item)}}}$ [{item}] Predicted vs. Actual Price")
     ax_main.legend()

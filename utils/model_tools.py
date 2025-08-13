@@ -48,47 +48,38 @@ id_to_name: Dict[int, str] = {value: key for key, value in name_to_id.items()}
 
 # --- Step 2: Create a Fast Lookup Function ---
 
-def item_name(query: int|str) -> str|int:
+def item_name(query: int|np.integer|str) -> str|int:
     """
     Performs a fast, bi-directional lookup using pre-built dictionaries.
     """
-    if isinstance(query, int):
-        if query in id_to_name:
-            return id_to_name.get(query)
-        else: raise ValueError(f"ID '{query}' not found.")
-    elif isinstance(query, str):
-        if query in name_to_id:
-            return name_to_id.get(query)
-        else: raise ValueError(f"Name '{query}' not found.")
-    else: raise ValueError("Input must be integer ID or string name")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def target_time_features(y:pd.DataFrame, feature_col:str, time_feature:int = 2) -> pd.DataFrame:
-    data = y.copy()
-    lagged_data = {f'lag{t}': data[feature_col].shift(t) for t in range(1, time_feature + 1)}
-    lagged_df = pd.DataFrame(lagged_data, index=data.index)
+    if isinstance(query, (int, np.integer)):
+        # Use .get() with an f-string for concise error handling
+        result = id_to_name.get(query)
+        if result is None:
+            raise ValueError(f"ID '{query}' not found.")
+        return result
     
-    return pd.concat([data, lagged_df], axis=1)
+    elif isinstance(query, str):
+        result = name_to_id.get(query)
+        if result is None:
+            raise ValueError(f"Name '{query}' not found.")
+        return result
+    else:
+        raise ValueError("Input must be integer ID or string name")
+
+def create_feature_lags(data:pd.DataFrame, feature_col:str, lags:list[int]) -> pd.DataFrame:
+    working_data = data.copy()
+    lagged_data = {f'lag{t}': working_data[feature_col].shift(t) for t in lags}
+    lagged_df = pd.DataFrame(lagged_data, index=working_data.index)
+    result_df = pd.concat([working_data, lagged_df], axis=1)
+    
+    return result_df
+
+def target_rolling_features(y:pd.DataFrame, feature_col:str, window:int = 2) -> pd.DataFrame:
+    data = y.copy()
+    data['rolling_mean'] = data[feature_col].rolling(window).mean().shift(1)
+    data['rolling_std'] = data[feature_col].rolling(window).std().shift(1)
+    return data
 
 def rolling_threshold_classification(features:pd.DataFrame, window:int, diffpercent:float) -> pd.DataFrame: 
     if window==0:
@@ -109,12 +100,6 @@ def rolling_threshold_classification(features:pd.DataFrame, window:int, diffperc
         newfeatures[~masklow & ~maskhigh]=1
         
     return newfeatures.astype(int)
-
-def target_rolling_features(y:pd.DataFrame, feature_col:str, window:int = 2) -> pd.DataFrame:
-    data = y.copy()
-    data['rolling_mean'] = data[feature_col].rolling(window).mean()
-    data['rolling_std'] = data[feature_col].rolling(window).std()
-    return data[['rolling_mean', 'rolling_std']]
 
 def mase(y_true:np.ndarray,y_pred:np.ndarray,y_train:np.ndarray,m:int=1) -> float:
     naive_errors = np.abs(y_train[m:]-y_train[:-m])
@@ -192,6 +177,7 @@ def calculate_directional_accuracy(actual_prices: np.ndarray, predicted_prices: 
     return (correct_predictions / len(actual_changes_from_last_actual)) * 100
 
 def prep_tree_model(data:pd.DataFrame, target_col:str, holdout:int) -> tuple:
+    dtype = 'float32'
 
     if holdout<=0:
         raise ValueError("holdout period must be non-negative.")
@@ -199,7 +185,11 @@ def prep_tree_model(data:pd.DataFrame, target_col:str, holdout:int) -> tuple:
     full_x = data.drop(target_col, axis=1)
     full_y = data[target_col]
     
-    return full_x, full_y
+    train_x = data.drop(target_col, axis=1).iloc[:-holdout].to_numpy(dtype=dtype)
+    train_y = data[target_col].iloc[:-holdout].to_numpy(dtype=dtype)
+
+    
+    return full_x, full_y, train_x, train_y
 
 def score_tree_model(full_y, holdout, y_holdout, final_preds_holdout, final_train_Y) -> tuple:
 
@@ -217,73 +207,65 @@ def score_tree_model(full_y, holdout, y_holdout, final_preds_holdout, final_trai
     final_holdout_da = calculate_directional_accuracy(combined_actuals_for_da, combined_preds_for_da)
 
     return final_holdout_mae, final_holdout_mase, final_holdout_da
-def outlier_detection(best_model, full_y, full_x, window_size, outlier_threshold) -> pd.Series:
-#outlier detection REWORK 
-        window_size = 20
-        epsilon = 1e-8
-        residuals = full_y - best_model.predict(full_x.to_numpy(dtype='float32'))
-        mad_resid = residuals.rolling(window=window_size).apply(lambda x: np.median(abs(x - np.median(x))))
-        mod_z_resid = 0.6745 * (residuals - residuals.rolling(window=window_size).median()) / (mad_resid + epsilon) #hard-coded value why?
-        outliers = full_y[abs(mod_z_resid) > outlier_threshold]
 
-        return outliers
+def calculate_returns(price_data: pd.DataFrame | pd.Series, item: int|str|None = None, return_periods: str|None = None) -> pd.Series:
+    """
+    Calculates returns for a given price series, handling both base returns and resampling.
+    """
+    # First, get the price series, regardless of input type.
+    if isinstance(price_data, pd.DataFrame):
+        if item is None:
+            raise ValueError("item must be specified when price_data is a DataFrame")
+        if isinstance(item, str):
+            item = item_name(item)
+        price_series = price_data[item]
+    else:
+        price_series = price_data
+
+    base_returns = price_series.pct_change().dropna()
+
+    if return_periods is None or return_periods.lower() == '5m':
+        return base_returns
+    
+    elif isinstance(return_periods, str):
+        try:
+            compound_returns = (1 + base_returns).resample(return_periods).prod() - 1
+            return compound_returns
+        except Exception as e:
+            raise ValueError(f"Invalid resample rule '{return_periods}'. Error: {e}")
+    else:
+        raise ValueError("return_periods must be a valid resample string or None.")
 
 def beta(
-    data:           pd.DataFrame,
-    item:           int,
-    market_index:   pd.Series,
-    start:          str|None = None,
-    end:            str|None = None,
-) -> float: 
-    timestamp_slice = None
-    market_index_slice = None
-
-    market_index_slice = market_index.loc[start:end]
-    
-    beta = market_index_slice.corr(data[item]) * (data[item].loc[start:end].std()/market_index.loc[start:end].std())
-    return beta
-
-
-def generate_dates_with_rollover(start_date_str, day_numbers_str):
+    price_data: pd.DataFrame,
+    item: int|str,
+    market_index: pd.Series,
+    return_periods: str|None = None,
+    start: str|None = None,
+    end: str|None = None,
+) -> float:
     """
-    Generates a list of dates by conditionally rolling back the month.
-    The month rolls back by one only when a day number in the list is
-    greater than the last day number processed.
-
-    Args:
-        start_date_str (str): The date to start from, in 'YYYY-MM-DD' format.
-        day_numbers_str (str): A comma-separated string of day numbers to use.
-                               e.g., "27, 25, 4, 1, 25, 16".
-    Returns:
-        pd.DatetimeIndex: A pandas DatetimeIndex containing the generated dates.
+    Calculates the Beta of an item relative to a market index.
     """
-    try:
-        current_date = datetime.strptime(start_date_str, '%Y-%m-%d')
-        day_numbers = [int(d.strip()) for d in day_numbers_str.split(',')]
-    except (ValueError, IndexError):
-        print("Error: Please check your date and day number formats.")
-        return pd.DatetimeIndex([])
+    if isinstance(item, str):
+        item = item_name(item)
 
-    generated_dates = []
+    combined_prices = pd.DataFrame({
+        'item': price_data[item],
+        'market': market_index,
+    }).loc[start:end]
+
+    item_returns = calculate_returns(combined_prices['item'], return_periods=return_periods)
+    market_returns = calculate_returns(combined_prices['market'], return_periods=return_periods)
     
-    # Initialize the last_day_seen to a high value to handle the first entry
-    last_day_seen = current_date.day + 1
+    covariance = item_returns.cov(market_returns)
+    market_variance = market_returns.var()
 
-    for day in day_numbers:
-        # Check for a month rollover condition
-        # This happens if the new day number is greater than the last one seen
-        if day > last_day_seen:
-            current_date -= relativedelta(months=1)
-        
-        # Create a new date object with the current month/year and the new day
-        new_date = current_date.replace(day=day)
-        generated_dates.append(new_date)
-        
-        # Update the last day seen for the next iteration
-        last_day_seen = day
-
-    # Convert the list of datetime objects into a DatetimeIndex
-    return pd.to_datetime(generated_dates)
+    if market_variance == 0:
+        return np.nan
+    
+    beta_value = covariance / market_variance
+    return beta_value
 
 def create_item_index(data: pd.DataFrame|list, items:list, type:str, base_value:int=100) -> pd.Series:
     """
@@ -335,3 +317,12 @@ def create_item_index(data: pd.DataFrame|list, items:list, type:str, base_value:
         index_volume_weight = base_value * vprice_ratio
         return index_volume_weight
     else: raise ValueError("Select valid index type")
+
+def volatility_market(price_data: pd.DataFrame, smoothing: int = 20) -> pd.Series:
+    #Aggregate volatility
+    volatilityitems = price_data.rolling(window=smoothing).std().shift(1)
+    volatilitymarket = volatilityitems.sum(axis=1)
+    #Scaling
+    volatilitymarket = volatilitymarket/price_data.shape[1]
+
+    return volatilitymarket.rename('market_vix')[smoothing:]
