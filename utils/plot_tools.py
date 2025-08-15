@@ -274,15 +274,12 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
     item = int(data.columns[0])
     # Preserve original timestamps for plotting
     time_index = data.index.to_numpy()  
-
-    # adj_index now represents the full time range for plotting, covering the 'lookback' period
     adj_index = time_index[-lookback:]
     
     if lookback > data.shape[0]:
         print(f"Warning: 'lookback' ({lookback}) is greater than dataset size ({data.shape[0]}). Adjusting lookback to max size for plotting consistency.")
         lookback = data.shape[0]
         adj_index = time_index
-    # Ensure lookback is at least as large as holdout, otherwise adjust.
     if lookback < len(holdout_pred):
         print(f"Warning: 'lookback' ({lookback}) is less than 'holdout' ({len(holdout_pred)}). Adjusting lookback to holdout value for plotting consistency.")
         lookback = len(holdout_pred)
@@ -291,7 +288,6 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
     # Determine the slice points for training/test and holdout periods
     training_test_plot_end_idx = lookback - len(holdout_pred) 
     
-    # Corresponding time indices for the plot
     training_test_time_indices = adj_index[:training_test_plot_end_idx]
     holdout_time_indices = adj_index[training_test_plot_end_idx:]
 
@@ -375,7 +371,6 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
         ax_hist.text(0.02, 0.98, textstr, transform=ax_hist.transAxes, fontsize=10,
                 verticalalignment='top', horizontalalignment='left', bbox=props)
 
-
     else: 
         # Residual Calculation
         residuals = Y[-len(holdout_pred):] - holdout_pred #not sure if leaking
@@ -426,7 +421,6 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
         label.set_rotation(45)
         label.set_horizontalalignment('right') # Adjust horizontal alignment after rotation
 
-    # REMOVED: fig.autofmt_xdate(rotation=45) 
     plt.show()
 
 def test_train_error(data, param:str, exclude_param:dict, model_class, param_range, split=0.8,loss=mean_absolute_error):

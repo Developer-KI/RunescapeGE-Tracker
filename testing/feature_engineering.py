@@ -1,7 +1,7 @@
 #%%
 import  os
 import  sys
-project_root = os.path.abspath(os.path.join(os.getcwd(), '.'))
+project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
 if project_root not in sys.path: sys.path.append(project_root)
 import  numpy as np
 import  pandas as pd
@@ -31,6 +31,15 @@ boss_data = pipeline.data_explicit_preprocess( #refine argument handling
     )
 boss_matrix_items = boss_data.pivot(index="timestamp", columns="item_id", values="wprice")
 boss_matrix_items.index = pd.to_datetime(boss_matrix_items.index, unit='s', utc=True).tz_convert('US/Eastern')
+bandos_index = tools.create_item_index(boss_matrix_items,[
+tools.item_name("Bandos chestplate"),
+tools.item_name("Bandos tassets"),
+tools.item_name("Bandos boots"),
+tools.item_name("Bandos hilt"),
+tools.item_name("Godsword shard 1"),
+tools.item_name("Godsword shard 2"),
+tools.item_name("Godsword shard 3"),
+], 'equal',100)
 #%%
 target_item1 = np.random.choice(price_matrix_items.columns)
 target_item2 = np.random.choice(price_matrix_items.columns)
@@ -60,21 +69,23 @@ vprice_market_item_corr = price_matrix_items.corrwith(market_index_volume_weight
 #indexes for rune,log,herb,food,metal
 
 # %% Price History
-price_corr = price_matrix_items[target_item1].rolling(20).corr(price_matrix_items[target_item2])
+price_corr_items = price_matrix_items[target_item1].rolling(20).corr(price_matrix_items[target_item2])
 #1-period returns
 returns_item1 = price_matrix_items[target_item1].pct_change()
 returns_item2 = price_matrix_items[target_item2].pct_change()
 #hourly-returns
-returns_item1_hourly = price_matrix_items[target_item1].resample('h').last().pct_change()
-returns_item2_hourly = price_matrix_items[target_item2].resample('h').last().pct_change()
+returns_item1_hourly = tools.calculate_returns(price_matrix_items[target_item1], '1h')
+returns_item2_hourly = tools.calculate_returns(price_matrix_items[target_item2], '1h')
 #daily-returns
-returns_item1_daily = price_matrix_items[target_item1].resample('d').last().pct_change()
-returns_item2_daily = price_matrix_items[target_item2].resample('d').last().pct_change()
+returns_item1_hourly = tools.calculate_returns(price_matrix_items[target_item1], '1D')
+returns_item2_hourly = tools.calculate_returns(price_matrix_items[target_item2], '1D')
 #cyclical time features
 hour_time_sin = np.sin(price_matrix_items.index.minute*2*np.pi/60)
 hour_time_cos = np.cos(price_matrix_items.index.minute*2*np.pi/60)
 day_time_sin = np.sin(price_matrix_items.index.hour*2*np.pi/24)
 day_time_cos = np.cos(price_matrix_items.index.hour*2*np.pi/24)
+hour_trig = np.vstack((hour_time_sin, hour_time_cos)).T
+day_trig = np.vstack((day_time_sin, day_time_cos)).T
 #update info: 6:30 EST every Wednesday
 update_dates = pd.date_range(
     start='2015-03-28 11:30',
@@ -85,4 +96,3 @@ update_dates = pd.date_range(
 
 announcements = set(get_announcements()['timestamp'].dt.tz_localize('US/Eastern').dt.date)
 # %%
-

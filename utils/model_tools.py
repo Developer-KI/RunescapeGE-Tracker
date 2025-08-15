@@ -208,20 +208,10 @@ def score_tree_model(full_y, holdout, y_holdout, final_preds_holdout, final_trai
 
     return final_holdout_mae, final_holdout_mase, final_holdout_da
 
-def calculate_returns(price_data: pd.DataFrame | pd.Series, item: int|str|None = None, return_periods: str|None = None) -> pd.Series:
+def calculate_returns(price_series: pd.Series, return_periods: str|None = None) -> pd.Series:
     """
     Calculates returns for a given price series, handling both base returns and resampling.
     """
-    # First, get the price series, regardless of input type.
-    if isinstance(price_data, pd.DataFrame):
-        if item is None:
-            raise ValueError("item must be specified when price_data is a DataFrame")
-        if isinstance(item, str):
-            item = item_name(item)
-        price_series = price_data[item]
-    else:
-        price_series = price_data
-
     base_returns = price_series.pct_change().dropna()
 
     if return_periods is None or return_periods.lower() == '5m':
@@ -267,7 +257,7 @@ def beta(
     beta_value = covariance / market_variance
     return beta_value
 
-def create_item_index(data: pd.DataFrame|list, items:list, type:str, base_value:int=100) -> pd.Series:
+def create_item_index(data: pd.DataFrame|list, items:list[int], type:str, base_value:int=100) -> pd.Series:
     """
     Args:
         data (pd.DataFrame|str): Ensure passing in a list of price and volume DataFrames is ordered [price,volume].
@@ -288,7 +278,6 @@ def create_item_index(data: pd.DataFrame|list, items:list, type:str, base_value:
         print("Removing missing items and proceeding...")
         items_to_keep = [column for column in items if column in data_columns]
         items = items_to_keep
-
     
     if type == 'equal':
         if data is list:
@@ -326,3 +315,28 @@ def volatility_market(price_data: pd.DataFrame, smoothing: int = 20) -> pd.Serie
     volatilitymarket = volatilitymarket/price_data.shape[1]
 
     return volatilitymarket.rename('market_vix')[smoothing:]
+
+def rsi(price_data: pd.Series, periods: int) -> pd.Series:
+    
+    delta = price_data.diff(1)
+    gains = delta.where(delta > 0, 0)
+    losses = -delta.where(delta < 0, 0)
+    
+    avg_gain_smoothed = gains.ewm(com=periods - 1, adjust=False).mean()
+    avg_loss_smoothed = losses.ewm(com=periods - 1, adjust=False).mean()
+    # 4. Initialize an RSI Series with NaNs
+    rsi = pd.Series(np.nan, index=price_data.index)
+    
+    # 5. Handle the division by zero case explicitly
+    # Only calculate RS where avg_loss is not zero
+    mask = avg_loss_smoothed != 0
+    rs = pd.Series(np.nan, index=price_data.index)
+    rs[mask] = avg_gain_smoothed[mask] / avg_loss_smoothed[mask]
+    
+    # 6. Calculate RSI
+    rsi[mask] = 100 - (100 / (1 + rs[mask]))
+    
+    # 7. Set RSI to 100 where avg_loss is 0
+    rsi[avg_loss_smoothed == 0] = 100
+    
+    return rsi

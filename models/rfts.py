@@ -13,7 +13,7 @@ from   warnings import simplefilter
 
 simplefilter("error")
 
-def train_rfts_model(
+def _train_rfts_model(
     data:               pd.DataFrame,
     target_col:         str,
     holdout:            int,
@@ -134,7 +134,7 @@ def RFTS(
     full_y_filtered = full_y.drop(outliers.index)    
     y_holdout = full_y_filtered.iloc[-holdout:].to_numpy(dtype='float32')
 
-    best_model, final_preds_holdout, final_train_Y, cv_mae, cv_mase, cv_da, train_cv_mae, train_cv_mase  = train_rfts_model(
+    best_model, final_preds_holdout, final_train_Y, cv_mae, cv_mase, cv_da, train_cv_mae, train_cv_mase  = _train_rfts_model(
         data, 
         target_col, 
         holdout, 

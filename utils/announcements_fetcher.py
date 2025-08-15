@@ -12,7 +12,7 @@ from    typing import List
 #%%
 
 
-def webpage_request2(session: requests.Session, month: int, year: int) -> str:
+def _webpage_request(session: requests.Session, month: int, year: int) -> str:
     """
     Fetches HTML content from the Runescape news archive.
     Uses a requests session with a full set of rotating headers.
@@ -54,7 +54,7 @@ def webpage_request2(session: requests.Session, month: int, year: int) -> str:
         print(f"Error fetching data for {year}-{month}: {e}")
         return ""
 
-def get_announcements_new(months_ago: int|None = None, years_ago: int|None = None) -> List[pd.Timestamp]:
+def _get_announcements_new(months_ago: int|None = None, years_ago: int|None = None) -> List[pd.Timestamp]:
     """
     Scrapes news article timestamps from the Runescape news archive within a specified lookback period.
 
@@ -86,7 +86,7 @@ def get_announcements_new(months_ago: int|None = None, years_ago: int|None = Non
             print(f"Starting {year}")
             for month in range(start_month, end_month + 1):
                 time.sleep(random.uniform(10,25)) #over-request countermeasure
-                webtext = webpage_request2(session=session,year=year, month=month)
+                webtext = _webpage_request(session=session,year=year, month=month)
                 
                 if not webtext:
                     raise requests.HTTPError("Unexpected return from site")
@@ -134,7 +134,7 @@ def get_announcements(cache_file_path='../data/announcements_cache.csv', scrape:
             print(f"Scraping new data since {last_timestamp}...")
             
             # Call the core scraping function for the new period
-            new_timestamps = get_announcements_new(months_ago=months_ago, years_ago=years_ago)
+            new_timestamps = _get_announcements_new(months_ago=months_ago, years_ago=years_ago)
             new_df = pd.DataFrame(new_timestamps, columns=['timestamp'])
             
             # Append and save the combined data
@@ -150,7 +150,7 @@ def get_announcements(cache_file_path='../data/announcements_cache.csv', scrape:
     else:
         print("No cache file found. Performing full scrape...")
         # Perform   a full scrape from the beginning
-        full_timestamps = get_announcements_new(months_ago=None, years_ago=None)
+        full_timestamps = _get_announcements_new(months_ago=None, years_ago=None)
         full_df = pd.DataFrame(full_timestamps, columns=['timestamp'])
         
         full_df.to_csv(cache_file_path, index=False)

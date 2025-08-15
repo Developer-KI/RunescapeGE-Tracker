@@ -1,3 +1,4 @@
+#%%
 import requests
 import pandas as pd
 import time
@@ -125,7 +126,7 @@ def writing_returns(filepath: str = "./data/data.csv", n: int = 100, p: int= 10,
     print(f"Initialized process. Expected mining time: {round(n * p * 1.1 / 60, 3)} minutes")
     for t in range(0, p):
         df_t = fetch_historical_5m(n = n, timestamp=timestamp_start - ((t * n) * 300))
-        last_call_timestamp = df_t.at[df_t.index[-1], 'timestamp']
+        last_call_timestamp = df_t.iloc[-1]['timestamp']
         df_t = df_t[['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp']]
         df_t.to_csv(filepath, mode='a', header=False, index=False)
         if t + 1 == p:
@@ -135,7 +136,7 @@ def writing_returns(filepath: str = "./data/data.csv", n: int = 100, p: int= 10,
         with open("./data/data_properties.txt", "w") as file:
             file.write(f"{last_call_timestamp}\n")
             file.write(f"{series_length}\n")
-        print(f"{(t + 1) * n} queries added!")
+        print(f"{(t + 1) * n} queries added! Time: {last_call_timestamp}")
     print("Success!")
     
     if del_duplicates:
