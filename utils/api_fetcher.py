@@ -63,7 +63,9 @@ def fetch_latest() -> pd.DataFrame:
         raise Exception("Failed to fetch data")
 
 def fetch_5min(timestamp: int = 0) -> pd.DataFrame:
-    if timestamp == 0:
+    time_to_present = int(datetime.now().timestamp()) - timestamp
+
+    if timestamp == 0 or time_to_present < 0:
         url = f"https://prices.runescape.wiki/api/v1/osrs/5m"
     else:
         url = f"https://prices.runescape.wiki/api/v1/osrs/5m?timestamp={timestamp}"
@@ -89,55 +91,93 @@ def fetch_historical_5m(n = 10, mins=5, waits=1.1, timestamp: int = 0) -> pd.Dat
     unix_timestamp_seconds = unix_timestamp_seconds - unix_timestamp_seconds % 300
     df = fetch_5min(unix_timestamp_seconds)
 
-    for t in range(0, n):
+    for t in range(1, n):
         df_t = fetch_5min(unix_timestamp_seconds - (mins * 60) * t)
         df = pd.concat([df, df_t], ignore_index=True)
         time.sleep(waits)
 
     return df[['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp']]
 
+### When forward mining its mandatory to include duplication deletion in case of getting to present. For oppening mine forward direction is not possible
+def writing_returns(filepath: str = "./data/data.csv", n_periods: int = 100, p_chunks: int= 10, timestamp=None, del_duplicates: bool = True, mining_forward: bool = False) -> None:
+    #1 for backward and -1 for forward
+    direction = 1
 
-def writing_returns(filepath: str = "./data/data.csv", n_periods: int = 100, p_chunks: int= 10, timestamp=None,del_duplicates: bool = True) -> None:
+    #Line index 0: Timestamp of start of data 1: Timestamp of end of data 2: Lenght of timestamp data for each item
     with open("./data/data_properties.txt", "r") as file:
         lines = file.readlines()
+
+    #Compliance Check
+    if lines == False and mining_forward == True:
+        raise Exception("Impossible to mine forward with no previous mining session")
+    
+    #Mining Mode Selection
     if lines:
-        print('Resuming Mining...')
+        print('Resuming Mining Backward')
+        timestamp_start = int(lines[1].strip())
+        series_length = int(lines[2].strip())
+    elif mining_forward == True:
+        print('Resuming Mining Forward')
         timestamp_start = int(lines[0].strip())
-        series_length = int(lines[1].strip())
+        series_length = int(lines[2].strip())
+        direction = -1
     elif timestamp is not None:
-        print('Resuming Mining from Specified Time Period')
+        print('Resuming Mining Backward from Specified Time Period')
         timestamp_start = timestamp
         timestamp_start = timestamp_start - timestamp_start % 300
-        series_length=int(lines[1].strip()) #shouldn't wipe series_length so custom scrapes can be appended for API outages/other issues
+        series_length=int(lines[2].strip()) #shouldn't wipe series_length so custom scrapes can be appended for API outages/other issues
     else:
-        print('Mining from Present') 
+        print('Mining Backward from Present') 
         timestamp_start = int(datetime.now().timestamp())
         timestamp_start = timestamp_start - timestamp_start % 300
         series_length = 0
 
-    #     timestamp_start = int(datetime.now().timestamp())
-    # timestamp_start = timestamp_start - timestamp_start % 300
-    # series_length = 0
-
-    # with open("./data/data_properties.txt", "r") as file:
-    #         lines = file.readlines()
-    # if lines != list():
-    #     timestamp_start = int(lines[0].replace("\n", ""))
-    #     series_length = int(lines[1].replace("\n", ""))
-
     print(f"Initialized process. Expected mining time: {round(n_periods * p_chunks * 1.1 / 60, 3)} minutes")
     for t in range(0, p_chunks):
-        df_t = fetch_historical_5m(n = n_periods, timestamp=timestamp_start - ((t * n_periods) * 300))
+        #Fetching Logic
+        time_to_present = int(datetime.now().timestamp()) - timestamp_start - direction * ((t * n_periods) * 300)
+        df_t = fetch_historical_5m(n = n_periods, timestamp=timestamp_start - direction * ((t * n_periods) * 300))
         last_call_timestamp = df_t.iloc[-1]['timestamp']
+        first_call_timestamp = df_t.iloc[1]['timestamp']
         df_t = df_t[['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp']]
         df_t.to_csv(filepath, mode='a', header=False, index=False)
-        series_length = series_length + n_periods
+
+        #Series_lenght counting for forward mining
+        if mining_forward == True:
+            if time_to_present < 0:
+                series_length = series_length + (last_call_timestamp - first_call_timestamp % 300)
+            else:
+                series_length = series_length + n_periods
+        
+        #Keeping tabs of timestamp start/end data in data properties
+        if mining_forward==True:
+            last_call_timestamp = int(lines[1].strip())
+        elif mining_forward==False and series_length == 0:
+            first_call_timestamp = int(datetime.now().timestamp()) - int(datetime.now().timestamp()) % 300
+        else:
+            first_call_timestamp = int(lines[0].strip())
+
+        #Series_lenght counting for backward mining
+        if mining_forward == False:
+            if t + 1 == p_chunks:
+                series_length = series_length + n_periods - 1
+            else:
+                series_length = series_length + n_periods
+
+        #Saving to data properties
         with open("./data/data_properties.txt", "w") as file:
+            file.write(f"{first_call_timestamp}\n")
             file.write(f"{last_call_timestamp}\n")
             file.write(f"{series_length}\n")
         print(f"{(t + 1) * n_periods} queries added! Time: {last_call_timestamp}")
+
+        #Forward Mining reaching present redundency break
+        if mining_forward == True and last_call_timestamp - first_call_timestamp == 0:
+            print("Forward Mining reached present")
+            break;
     print("Success!")
     
+    #Handling of duplicates
     if del_duplicates:
         df = pd.read_csv(filepath, names=['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp'])
         df = df.drop_duplicates()
