@@ -147,7 +147,10 @@ def writing_returns(filepath: str = "./data/data.csv", n_periods: int = 100, p_c
             if time_to_present < 0:
                 series_length = series_length + (last_call_timestamp - first_call_timestamp % 300)
             else:
-                series_length = series_length + n_periods
+                if t + 1 == p_chunks:
+                    series_length = series_length + n_periods - 1
+                else:
+                    series_length = series_length + n_periods
         
         #Keeping tabs of timestamp start/end data in data properties
         if mining_forward==True:
