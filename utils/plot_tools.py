@@ -102,7 +102,7 @@ def plot_item_market_divergence(
     data:           pd.DataFrame,
     item:           int,
     market_index:   pd.Series,
-    return_periods: int|None = 1,
+    return_periods: str|None = None,
     start:          str|None = None,
     end:            str|None = None,
     show:           bool = False
@@ -113,12 +113,12 @@ def plot_item_market_divergence(
     market_index = tools.ensure_datetime_index(market_index)
     market_index_slice = market_index.loc[start:end]
     timestamp_slice = market_index.index[start:end]
-    if return_periods is None or return_periods == 1 :
+    if return_periods is None or return_periods == '5m' :
         market_returns = market_index_slice.pct_change().dropna()
         item_returns = data[item].pct_change().dropna()
-    elif return_periods > 1: 
+    elif return_periods is not None and isinstance(return_periods, str): 
         market_returns = tools.calculate_returns(market_index_slice, return_periods=return_periods)
-        item_returns = tools.calculate_returns(market_index_slice, return_periods=return_periods)
+        item_returns = tools.calculate_returns(data[item].loc[timestamp_slice], return_periods=return_periods)
     else: raise ValueError('Valid return period required')
     
     return_diff = market_returns-item_returns
@@ -240,7 +240,7 @@ def plot_classification_vs_price(hist_pricedata,hidden_states,item, model):
 
     plt.show()
 
-def plot_residuals(data: pd.DataFrame, model, lookback: int = 0):
+def plot_residuals(data: pd.DataFrame, model, lookback: int = 0) -> np.ndarray:
     X = data.drop(data.columns[0], axis=1).to_numpy()
     Y = data[data.columns[0]].to_numpy()
     adj_index = data.index[lookback:]
@@ -263,6 +263,7 @@ def plot_residuals(data: pd.DataFrame, model, lookback: int = 0):
     plt.grid()
     plt.xticks(rotation=45)
     plt.show()
+    return residuals
 
 def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookback: int = 0, fill_outliers=None, std_factor: float = 1.96):
     if fill_outliers is not None:

@@ -43,7 +43,7 @@ totalvolume_time = VOLUME_MATRIX_ITEMS.iloc[:,1:].sum(axis=1)
 
 item1 = np.random.choice(PRICE_MATRIX_ITEMS.columns)
 item2 = np.random.choice(PRICE_MATRIX_ITEMS.columns)
-item=1603
+item= np.random.choice(PRICE_MATRIX_ITEMS.columns)
 start = 20
 market_volatility = volatility_market(PRICE_MATRIX_ITEMS, smoothing=start)
 vix_index= market_volatility.iloc[start:].index
@@ -52,7 +52,7 @@ plot_index = pd.to_datetime(market_volatility.iloc[:].index, unit='s')
 #%% Item Volatility 
 lookback=return_period=400 #288 daily
 item_price= PRICE_MATRIX_ITEMS[item]
-log_returns=np.log(1+item_price.pct_change(return_period).dropna())
+# log_returns=np.log(1+item_price.pct_change(return_period).dropna())
 volatility = PRICE_MATRIX_ITEMS[item].rolling(return_period).std().dropna()[1+lookback:] #dropped first to match pct_change of log_returns + lookback shift
 
 myplot.plot_features(volatility, ylab='Standard Deviations (GP)', title=fr'$\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Volatility')

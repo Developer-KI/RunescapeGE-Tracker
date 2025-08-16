@@ -7,6 +7,7 @@ from   xgboost import XGBRegressor
 from   sklearn.model_selection import TimeSeriesSplit
 from   sklearn.metrics import mean_absolute_error
 from   utils import model_tools as tools
+import utils.outlier_detection as outlier
 #import scipy.stats as scistats
 #from statsmodels.tsa.stattools import adfuller
 
@@ -98,23 +99,41 @@ def train_xgb_model(
         raise Exception("Failed to choose model.")
 
 def XGB(
-    data:pd.DataFrame,
-    target_col:str, 
-    holdout:int, 
+    data:               pd.DataFrame,
+    target_col:         str, 
+    holdout:            int, 
     outlier_threshold:  float = 2,
     outlier_window:     int = 20,
-    detection:          str = 'rolling-z',
-    n_estimators:int=200, 
-    time_splits:int=5, 
-    max_depth:int=5, 
-    learning_rate:float=0.03, 
-    subsample:float=0.4, 
-    colsample_bytree:float=0.8, 
-    min_child_weight:int=5
+    detection:          str = 'ewm',
+    ewm_bounds:         list[float]|None = None,
+    n_estimators:       int = 200, 
+    time_splits:        int = 5, 
+    max_depth:          int = 5, 
+    learning_rate:      float = 0.03, 
+    subsample:          float = 0.4, 
+    colsample_bytree:   float = 0.8, 
+    min_child_weight:   int = 5
 ) -> tuple:
     
-    full_x, full_y = tools.prep_tree_model(data, target_col, holdout)
-    y_holdout = full_y.iloc[-holdout:].to_numpy(dtype='float32')
+    full_y = data[target_col]
+
+    if detection=='rolling-z':
+        outliers = outlier.rolling_zscore(full_y, outlier_window, outlier_threshold)
+        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
+    elif detection=='iqr':
+        outliers = outlier.iqr(full_y, outlier_threshold)
+        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
+    elif detection=='ewm' and ewm_bounds is not None:
+        ewm_bounds_percentage_lower = 1-ewm_bounds[0]
+        ewm_bounds_percentage_upper = 1+ewm_bounds[1]
+        outliers = outlier.ewm(full_y, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper)
+        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
+    elif detection is not None and not isinstance(detection, str):
+        raise ValueError("Outlier parameter must be of string type")
+    else: raise ValueError("Selection error")
+    
+    full_y_filtered = full_y.drop(outliers.index)
+    y_holdout = full_y_filtered.iloc[-holdout:].to_numpy(dtype='float32')
 
     best_model, final_preds_holdout, final_train_Y, cv_mae, cv_mase, cv_da = train_xgb_model(
         data, 
@@ -129,18 +148,6 @@ def XGB(
         min_child_weight
         )
     final_holdout_mae, final_holdout_mase, final_holdout_da = tools.score_tree_model(full_y, holdout, y_holdout, final_preds_holdout, final_train_Y)
-    if detection=='rolling-mad':
-        outliers = tools.rolling_median_average_deviation(best_model, full_y, full_x, outlier_window, outlier_threshold)
-        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
-    elif detection=='rolling-z':
-        outliers = tools.rolling_zscore(full_y, outlier_window, outlier_threshold)
-        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
-    elif detection=='iqr':
-        outliers = tools.iqr_outlier(full_y, outlier_threshold)
-        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
-    elif detection is not None and not isinstance(detection, str):
-        raise ValueError("Outlier parameter must be of string type")
-    else: print("No detection selected")
 
     print(f"Cross-validated MASE: {np.mean(cv_mase):.4f} (±{np.std(cv_mase):.4f})")
     print(f"Cross-validated MAE: {np.mean(cv_mae):.4f} (±{np.std(cv_mae):.4f})")
@@ -155,6 +162,7 @@ def XGB(
     if detection is not None and isinstance(detection,str):
         return best_model, final_preds_holdout, outliers
     else: return best_model, final_preds_holdout
+
 def XGBOptim(
     data:pd.DataFrame,
     target_col:str, 

@@ -202,8 +202,9 @@ def RFTSOptim(data:pd.DataFrame,target_col:str, holdout:int,n_trials:int=30,prun
                 best_test_idx=test_idx
         trial.set_user_attr("best_test_idx", best_test_idx)
         trial.set_user_attr("mase_scores", mase_scores)
-        return float(np.mean(mase_scores)*alpha+np.std(mase_scores))
-    
+        # return float(np.mean(mase_scores)*alpha+np.std(mase_scores))
+        return float(np.mean(mase_scores))
+
     study = optuna.create_study(direction="minimize")
     study.optimize(objective, n_trials=n_trials, n_jobs=4) #check processor cores for parallelization 
 
