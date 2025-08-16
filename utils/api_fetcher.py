@@ -135,7 +135,7 @@ def writing_returns(filepath: str = "./data/data.csv", n_periods: int = 100, p_c
     print(f"Initialized process. Expected mining time: {round(n_periods * p_chunks * 1.1 / 60, 3)} minutes")
     for t in range(0, p_chunks):
         #Fetching Logic
-        time_to_present = int(datetime.now().timestamp()) - timestamp_start - direction * ((t * n_periods) * 300)
+        time_to_present = int(datetime.now().timestamp()) - (timestamp_start - direction * ((t * n_periods) * 300))
         df_t = fetch_historical_5m(n = n_periods, timestamp=timestamp_start - direction * ((t * n_periods) * 300))
         last_call_timestamp = df_t.iloc[-1]['timestamp']
         first_call_timestamp = df_t.iloc[1]['timestamp']
