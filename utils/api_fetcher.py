@@ -79,6 +79,7 @@ def fetch_5min(timestamp: int = 0) -> pd.DataFrame:
     else:
         raise Exception("Failed to fetch data")
 
+
 def fetch_historical_5m(n = 10, mins=5, waits=1.1, timestamp: int = 0) -> pd.DataFrame:
     if timestamp != 0:
         unix_timestamp_seconds = timestamp
@@ -88,14 +89,15 @@ def fetch_historical_5m(n = 10, mins=5, waits=1.1, timestamp: int = 0) -> pd.Dat
     unix_timestamp_seconds = unix_timestamp_seconds - unix_timestamp_seconds % 300
     df = fetch_5min(unix_timestamp_seconds)
 
-    for t in range(1, n):
+    for t in range(0, n):
         df_t = fetch_5min(unix_timestamp_seconds - (mins * 60) * t)
         df = pd.concat([df, df_t], ignore_index=True)
         time.sleep(waits)
 
     return df[['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp']]
 
-def writing_returns(filepath: str = "./data/data.csv", n: int = 100, p: int= 10, timestamp=None,del_duplicates: bool = True) -> None:
+
+def writing_returns(filepath: str = "./data/data.csv", n_periods: int = 100, p_chunks: int= 10, timestamp=None,del_duplicates: bool = True) -> None:
     with open("./data/data_properties.txt", "r") as file:
         lines = file.readlines()
     if lines:
@@ -123,20 +125,17 @@ def writing_returns(filepath: str = "./data/data.csv", n: int = 100, p: int= 10,
     #     timestamp_start = int(lines[0].replace("\n", ""))
     #     series_length = int(lines[1].replace("\n", ""))
 
-    print(f"Initialized process. Expected mining time: {round(n * p * 1.1 / 60, 3)} minutes")
-    for t in range(0, p):
-        df_t = fetch_historical_5m(n = n, timestamp=timestamp_start - ((t * n) * 300))
+    print(f"Initialized process. Expected mining time: {round(n_periods * p_chunks * 1.1 / 60, 3)} minutes")
+    for t in range(0, p_chunks):
+        df_t = fetch_historical_5m(n = n_periods, timestamp=timestamp_start - ((t * n_periods) * 300))
         last_call_timestamp = df_t.iloc[-1]['timestamp']
         df_t = df_t[['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp']]
         df_t.to_csv(filepath, mode='a', header=False, index=False)
-        if t + 1 == p:
-            series_length = series_length + n - 1
-        else:
-            series_length = series_length + n
+        series_length = series_length + n_periods
         with open("./data/data_properties.txt", "w") as file:
             file.write(f"{last_call_timestamp}\n")
             file.write(f"{series_length}\n")
-        print(f"{(t + 1) * n} queries added! Time: {last_call_timestamp}")
+        print(f"{(t + 1) * n_periods} queries added! Time: {last_call_timestamp}")
     print("Success!")
     
     if del_duplicates:
