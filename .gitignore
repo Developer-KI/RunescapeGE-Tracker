@@ -3,10 +3,11 @@
 *.pyc
 # Data files
 data/data.csv
-data/processed_data.csv
 data/data_properties.txt
 testing/model_testing.py
 snippets
 bossnames.txt
 data/processed_explicit.csv
 data/processed_bosstables.csv
+data/processed_data.csv
+data/processed_old.csv
