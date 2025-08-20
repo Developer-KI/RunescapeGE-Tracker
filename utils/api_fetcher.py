@@ -323,5 +323,5 @@ def fetch_latest_idex_df():
 #%%
 if __name__ == "__main__":
     #writing_returns(n=10, p=500, timestamp=1747701935,del_duplicates=False)
-    writing_returns(n_periods=10, p_chunks=2000,del_duplicates=False, mining_forward=False)
+    writing_returns(n_periods=10, p_chunks=2500,del_duplicates=False, mining_forward=False)
 #run as .py file

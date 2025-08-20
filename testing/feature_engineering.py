@@ -13,21 +13,29 @@ if project_root not in sys.path:
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.join(script_dir, '..')
 boss_file_path = os.path.join(project_root, 'data', 'processed_bosstables.csv')
+cointegration_path = os.path.join(project_root, 'data', 'cointegration_price_matrix.csv')
 
+import csv
 import  numpy as np
 import  pandas as pd
 #import  seaborn as sns
 import  matplotlib.pyplot as plt
 import  utils.model_tools as tools
+from utils.model_tools import item_name
 import  utils.plot_tools as myplot
 import  utils.data_pipeline as pipeline
 import  pytz
 from    data.bosstables import bosstables_list as BOSSTABLES_LIST
 import  utils.api_fetcher as api
 from    utils.announcements_fetcher import get_announcements
+from statsmodels.tsa.stattools import coint
+from statsmodels.tsa.vector_ar.vecm import coint_johansen
+from arch.unitroot.cointegration import phillips_ouliaris
+from itertools import combinations
 #%% General Prices
 price_data = pipeline.data_preprocess2(read=True, write=False, interp_method='linear', filter_volume=True, filter_threshold=0.98)
 price_data = price_data.set_index('timestamp')
+#%%
 def item_data(price_data, datetime: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
     #unix time conversion & localization
     if datetime:
@@ -59,11 +67,20 @@ def boss_data(datetime: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
 # ], 'equal',100)
 
 #Correlations
-def item_corr(price_matrix_items: pd.DataFrame, vol_matrix_items: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    price_corr = price_matrix_items.corr() 
-    vol_corr = vol_matrix_items.corr()
-    np.fill_diagonal(price_corr.values, np.nan)  
-    np.fill_diagonal(vol_corr.values, np.nan)
+def item_corr(price_matrix_items: pd.DataFrame|None = None, vol_matrix_items: pd.DataFrame|None = None) -> tuple[pd.DataFrame|None, pd.DataFrame|None]|pd.DataFrame:
+    if price_matrix_items is None and vol_matrix_items is None:
+        raise ValueError("At least one DataFrame must be provided.")
+    price_corr = None
+    vol_corr = None
+    
+    if price_matrix_items is not None:
+        price_corr = price_matrix_items.corr() 
+        np.fill_diagonal(price_corr.values, np.nan) 
+        
+    if vol_matrix_items is not None:
+        vol_corr = vol_matrix_items.corr()
+        np.fill_diagonal(vol_corr.values, np.nan)
+        
     return price_corr, vol_corr
 
 #Indices
@@ -85,7 +102,7 @@ def market_item_corr(market_index: pd.Series, price_matrix_items) -> pd.Series:
 
 #indexes for rune,log,herb,food,metal
 
-# %% Price History
+# Price History
 #price_corr_items = price_matrix_items[target_item1].rolling(20).corr(price_matrix_items[target_item2])
 #1-period returns
 #returns_item1 = price_matrix_items[target_item1].pct_change()
@@ -108,7 +125,7 @@ def cyclical_time(price_matrix_items:pd.DataFrame) -> tuple:
     day_trig = np.vstack((day_time_sin, day_time_cos)).T
     return hour_time_sin, hour_time_cos, day_time_sin, day_time_cos, hour_trig, day_trig
 
-def updates_announcements() -> tuple[pd.DatetimeIndex, np.ndarray, pd.Series]:
+def updates_announcements(price_matrix_items: pd.DataFrame) -> tuple[pd.DatetimeIndex, pd.Series, pd.Series, pd.Series]:
     #update info: 6:30 EST every Wednesday
     update_dates = pd.date_range(
         start='2015-03-28 11:30',
@@ -116,7 +133,98 @@ def updates_announcements() -> tuple[pd.DatetimeIndex, np.ndarray, pd.Series]:
         freq='W-WED', # weekly wednesday
         tz='Europe/London' # Specify the British timezone
         ).tz_convert('US/Eastern') #back to EST
+    updates_df = pd.DataFrame(
+        {'last_update': update_dates},
+        index=update_dates
+    )
+
+    # Use pd.merge_asof to find the most recent update for each price point
+    merged_df = pd.merge_asof(
+        left=price_matrix_items,
+        right=updates_df,
+        left_index=True,
+        right_index=True,
+        direction='backward'
+    )
     
-                
+     # The merged DataFrame now has a 'last_update' column with the correct timestamps
+    last_update_timestamps = merged_df['last_update']
+
+    # Calculate the time difference
+    time_difference = price_matrix_items.index - last_update_timestamps
+
+    # Now you can correctly calculate hours and days
+    updates_hours_since = time_difference.dt.total_seconds() / 3600
+    updates_days_since = time_difference.dt.days
+
+    # You will need to set the index of the final Series to align with your original DataFrame
+    updates_hours_since.index = price_matrix_items.index
+    updates_days_since.index = price_matrix_items.index
+
     announcements = get_announcements()['timestamp'].dt.tz_localize('US/Eastern').dt.date #UTC assumption !!!
     return update_dates, updates_hours_since, updates_days_since, announcements
+#%%
+price_matrix_items, _ = item_data(price_data)
+#%%
+#price_corr = item_corr(price_matrix_items)
+#%%
+print(f'{item_name(555)} and {item_name(2)} Engle-Granger p-value: {coint(price_matrix_items[555], price_matrix_items[2])[1]}')
+print(f'{item_name(555)} and {item_name(2)} Engle-Granger p-value: {coint(price_matrix_items[555], price_matrix_items[2])[1]}')
+#%%
+
+
+# with open(cointegration_path, 'w', newline='') as f:
+#     writer = csv.writer(f)
+#     writer.writerow(['item1', 'item2', 'p_value'])
+    
+#     for item1, item2 in combinations(price_matrix_items.columns, 2):
+#         try:
+#             test_result = coint(price_matrix_items[item1], price_matrix_items[item2])
+#             p_value = test_result[1]
+
+#             print(f'{item_name(item1)} and {item_name(item2)} p-value: {p_value}')
+
+#             writer.writerow([item1, item2, p_value])
+        
+#         except Exception as e:
+#             print(f"An error occurred while testing pair ({item1}, {item2}): {e}")
+#             writer.writerow([item1, item2, "ERROR"])
+
+#%%
+
+
+processed_pairs = set()
+
+if os.path.exists(cointegration_path):
+    print(f"Existing file found. Resuming from last run.")
+    with open(cointegration_path, 'r', newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader) # Skip the header row
+        for row in reader:
+            if len(row) >= 2:
+                # Add the pair to our set for quick lookups
+                processed_pairs.add((row[0], row[1]))
+else:
+    print("No existing file found. Starting a new run.")
+
+with open(cointegration_path, 'a', newline='') as f:
+    writer = csv.writer(f)
+
+    if os.path.getsize(cointegration_path) == 0:
+        writer.writerow(['item1', 'item2', 'p_value'])
+
+    for item1, item2 in combinations(price_matrix_items.columns, 2):
+        if (str(item1), str(item2)) in processed_pairs or (str(item2), str(item1)) in processed_pairs:
+            continue  # Skip to the next pair
+
+        try:
+            test_result = coint(price_matrix_items[item1], price_matrix_items[item2])
+            p_value = test_result[1]
+            print(f'{item_name(item1)} and {item_name(item2)} p-value: {p_value}')
+            writer.writerow([item1, item2, p_value])
+        except Exception as e:
+            print(f"An error occurred while testing pair ({item1}, {item2}): {e}")
+            writer.writerow([item1, item2, "ERROR"])
+
+print("\nScript finished. All cointegration tests are now complete.")
+# %%
