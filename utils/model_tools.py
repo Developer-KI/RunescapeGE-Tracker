@@ -1,9 +1,16 @@
+import  os
+import sys
+# Get the directory of the current script (which is 'utils')
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Construct the full path to the JSON file
+json_path = os.path.join(current_dir, '..', 'data', 'nameID.json')
+
 import  pandas as pd
 import  numpy as np
 import  matplotlib.pyplot as plt
 import  utils.api_fetcher as fetcher
 import  scipy.stats as stats
-import  os
 from    matplotlib.ticker import MaxNLocator, ScalarFormatter
 from    utils.data_pipeline import alchemy_preprocess
 from    sklearn.metrics import mean_absolute_error
@@ -15,7 +22,6 @@ from    datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import json
 
-print(os.getcwd())
 # plt.rcParams.update({
 #     'axes.facecolor': '#2E2E2E',
 #     'axes.titlecolor': 'white',
@@ -40,7 +46,7 @@ plt.rcParams.update({
 
 })
 
-with open('../data/nameID.json', 'r') as file:
+with open(json_path, 'r') as file:
     name_to_id: Dict[str, int] = json.load(file)
 
 # Create the inverted dictionary for reverse lookups (also run only once)
@@ -100,18 +106,6 @@ def rolling_threshold_classification(features:pd.DataFrame, window:int, diffperc
         newfeatures[~masklow & ~maskhigh]=1
         
     return newfeatures.astype(int)
-
-def mase(y_true:np.ndarray,y_pred:np.ndarray,y_train:np.ndarray,m:int=1) -> float:
-    naive_errors = np.abs(y_train[m:]-y_train[:-m])
-    naive_mae = (naive_errors).mean()
-    # Model forecast error
-    mae_model = np.abs(y_true - y_pred).mean()
-    if naive_mae==0:
-        print("WARNING: Naive MAE=0, numerical instability due to epsilon division.")
-    if len(y_train) <= m:
-    # Handle cases where y_train is too short for differencing
-        print(f"WARNING: y_train length ({len(y_train)}) is too short for period m={m}.")
-    return mae_model/np.maximum(naive_mae, np.finfo(np.float64).eps)
 
 def convert_numpy(X) -> np.ndarray:
     """Convert pandas DataFrame to NumPy array if necessary."""
@@ -177,36 +171,55 @@ def calculate_directional_accuracy(actual_prices: np.ndarray, predicted_prices: 
     return (correct_predictions / len(actual_changes_from_last_actual)) * 100
 
 def prep_tree_model(data:pd.DataFrame, target_col:str, holdout:int) -> tuple:
-    dtype = 'float32'
 
     if holdout<=0:
-        raise ValueError("holdout period must be non-negative.")
+        raise ValueError("Holdout period must be non-negative.")
     
-    full_x = data.drop(target_col, axis=1)
-    full_y = data[target_col]
-    
-    train_x = data.drop(target_col, axis=1).iloc[:-holdout].to_numpy(dtype=dtype)
-    train_y = data[target_col].iloc[:-holdout].to_numpy(dtype=dtype)
+    holdout_x = data.drop(target_col, axis=1).iloc[-holdout:]
+    holdout_y = data[target_col].iloc[-holdout:]
+    train_x = data.drop(target_col, axis=1).iloc[:-holdout]
+    train_y = data[target_col].iloc[:-holdout]
 
     
-    return full_x, full_y, train_x, train_y
+    return train_x, train_y, holdout_x, holdout_y
 
-def score_tree_model(full_y, holdout, y_holdout, final_preds_holdout, final_train_Y) -> tuple:
+def score_tree_model(
+        y_train:        pd.Series,
+        y_holdout:      pd.Series,
+        holdout_preds:  pd.Series, 
+        ) -> tuple:
 
-    final_holdout_mase = mase(y_holdout, final_preds_holdout, final_train_Y, 1)
-    final_holdout_mae = mean_absolute_error(y_holdout, final_preds_holdout)
+    holdout_mase = mase(y_holdout, y_train, holdout_preds, 1)
+    holdout_mae = mean_absolute_error(y_holdout, holdout_preds)
 
-    # Calculate Final Holdout DA
+    # Calculate Holdout DA
     # Get the last actual price from the training data before the holdout
-    last_train_actual = full_y.iloc[-holdout - 1] 
+    last_train_actual = y_train.iloc[-1]
     
     # Combine last training actual with holdout actuals mand predictions
     combined_actuals_for_da = np.concatenate(([last_train_actual], y_holdout))
-    combined_preds_for_da = np.concatenate(([last_train_actual], final_preds_holdout))
+    combined_preds_for_da = np.concatenate(([last_train_actual], holdout_preds))
     
-    final_holdout_da = calculate_directional_accuracy(combined_actuals_for_da, combined_preds_for_da)
+    holdout_da = calculate_directional_accuracy(combined_actuals_for_da, combined_preds_for_da)
 
-    return final_holdout_mae, final_holdout_mase, final_holdout_da
+    return holdout_mae, holdout_mase, holdout_da
+
+def mase(y_true:    pd.Series|np.ndarray, 
+         y_train:   pd.Series|np.ndarray, 
+         y_pred:    pd.Series|np.ndarray, 
+         m:         int=1
+        ) -> float:
+    
+    naive_errors = np.abs(y_train[m:].values-y_train[:-m].values)
+    naive_mae = (naive_errors).mean()
+    # Model forecast error
+    mae_model = np.abs(y_true - y_pred).mean()
+    if naive_mae==0:
+        print("WARNING: Naive MAE=0, numerical instability due to epsilon division.")
+    if len(y_train) <= m:
+    # Handle cases where y_train is too short for differencing
+        print(f"WARNING: y_train length ({len(y_train)}) is too short for period m={m}.")
+    return mae_model/np.maximum(naive_mae, np.finfo(np.float64).eps)
 
 def calculate_returns(price_series: pd.Series, return_periods: str|None = None) -> pd.Series:
     """

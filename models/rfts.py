@@ -14,10 +14,14 @@ from   warnings import simplefilter
 simplefilter("error")
 
 def _train_rfts_model(
-    data:               pd.DataFrame,
-    target_col:         str,
-    holdout:            int,
+    train_x:            pd.Series,
+    train_y:            pd.Series,
     time_splits:        int = 5,
+    outlier_threshold:  float = 2,
+    outlier_window:     int = 20,
+    detection:          str = 'ewm',
+    ewm_bounds:         list[float]|None = None,
+    mase_m:             int = 1,
     min_samples_leaf:   int = 5,
     min_samples_split:  int = 5,
     n_estimators:       int = 100,
@@ -25,23 +29,46 @@ def _train_rfts_model(
     max_depth:          int = 10,
 ) -> tuple:
     
-    full_x, full_y, train_x, train_y = tools.prep_tree_model(data, target_col, holdout)
-
     tscv = TimeSeriesSplit(n_splits=time_splits)
     
     train_cv_mase=[]
     train_cv_mae=[]
-    
     cv_mase=[]
     cv_mae=[]
     cv_da=[]
+    
+    outliers_set=set()
     best_mase=float('inf')
     best_mase=float('inf')
     best_model=None
 
     for train_idx, test_idx in tscv.split(train_x):
-        X_train_cv, X_test_cv = train_x[train_idx,:], train_x[test_idx,:]
-        y_train_cv, y_test_cv = train_y[train_idx], train_y[test_idx]
+        x_train_cv, x_test_cv = train_x.iloc[train_idx], train_x.iloc[test_idx]
+        y_train_cv, y_test_cv = train_y.iloc[train_idx], train_y.iloc[test_idx]
+
+        if detection=='rolling-z':
+            y_train_outliers = outlier.rolling_zscore(y_train_cv, outlier_window, outlier_threshold)
+            y_test_outliers = outlier.rolling_zscore(y_test_cv, outlier_window, outlier_threshold)
+        elif detection=='iqr':
+            y_train_outliers = outlier.iqr(y_train_cv, outlier_threshold)
+            y_test_outliers = outlier.iqr(y_test_cv, outlier_threshold)
+        elif detection=='ewm' and ewm_bounds is not None:
+            ewm_bounds_percentage_lower = 1-ewm_bounds[0]
+            ewm_bounds_percentage_upper = 1+ewm_bounds[1]
+            y_train_outliers = outlier.ewm(y_train_cv, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper)
+            y_test_outliers = outlier.ewm(y_test_cv, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper)
+        elif detection is not None and not isinstance(detection, str):
+            raise ValueError("Outlier parameter must be of string type")
+        else: raise ValueError("Selection error")
+            
+        outliers_set.update(y_train_outliers.index)
+        outliers_set.update(y_test_outliers.index)
+        
+        # Filter both X and y based on the outliers found in y
+        x_train_cv_filtered = x_train_cv[~np.isin(np.arange(len(y_train_cv)), y_train_outliers.index)]
+        y_train_cv_filtered = y_train_cv[~np.isin(np.arange(len(y_train_cv)), y_train_outliers.index)]
+        x_test_cv_filtered = x_test_cv[~np.isin(np.arange(len(y_test_cv)), y_test_outliers.index)]
+        y_test_cv_filtered = y_test_cv[~np.isin(np.arange(len(y_test_cv)), y_test_outliers.index)]
 
         model_cv = RandomForestRegressor(
             n_estimators=n_estimators, 
@@ -51,26 +78,26 @@ def _train_rfts_model(
             max_features=max_features, 
             n_jobs=-1
             )
-        model_cv.fit(X_train_cv, y_train_cv) 
-        
-        preds_cv = model_cv.predict(X_test_cv)
-        model_mase = tools.mase(y_test_cv, preds_cv, y_train_cv,1)
-        model_mae= mean_absolute_error(y_test_cv,preds_cv)
+        model_cv.fit(x_train_cv_filtered, y_train_cv_filtered) 
+
+        preds_cv_filtered = model_cv.predict(x_test_cv_filtered)
+        model_mase = tools.mase(y_test_cv_filtered, y_train_cv_filtered, preds_cv_filtered, mase_m)
+        model_mae= mean_absolute_error(y_test_cv_filtered,preds_cv_filtered)
         cv_mase.append(model_mase)
         cv_mae.append(model_mae)
         
-        preds_train_cv = model_cv.predict(X_train_cv)
-        model_train_mase = tools.mase(y_train_cv, preds_train_cv, y_train_cv,1)
-        model_train_mae= mean_absolute_error(y_train_cv,preds_train_cv)
+        preds_train_cv_filtered = model_cv.predict(x_train_cv_filtered)
+        model_train_mase = tools.mase(y_train_cv_filtered, y_train_cv_filtered, preds_train_cv_filtered,mase_m)
+        model_train_mae= mean_absolute_error(y_train_cv_filtered,preds_train_cv_filtered)
         train_cv_mase.append(model_train_mase)
         train_cv_mae.append(model_train_mae)
 
-        if len(y_test_cv) > 0 and len(y_train_cv) > 0: # Ensure there's data to calculate direction
-            last_actual_in_train_cv = y_train_cv[-1]
+        if len(y_test_cv_filtered) > 0 and len(y_train_cv_filtered) > 0: # Ensure there's data to calculate direction
+            last_actual_in_train_cv = y_train_cv_filtered.iloc[-1]
             
             # Combine for DA calculation
-            combined_actuals_cv_da = np.concatenate(([last_actual_in_train_cv], y_test_cv))
-            combined_preds_cv_da = np.concatenate(([last_actual_in_train_cv], preds_cv))
+            combined_actuals_cv_da = np.concatenate(([last_actual_in_train_cv], y_test_cv_filtered))
+            combined_preds_cv_da = np.concatenate(([last_actual_in_train_cv], preds_cv_filtered))
             
             model_da = tools.calculate_directional_accuracy(combined_actuals_cv_da, combined_preds_cv_da)
             cv_da.append(model_da)
@@ -82,19 +109,8 @@ def _train_rfts_model(
             best_model = model_cv  
             
     if best_model is not None:
-        
-        #**fix AI numpy conversion slop**
-        # Final model training
-        final_train_X = full_x.iloc[:-holdout].to_numpy(dtype='float32')
-        final_train_Y = full_y.iloc[:-holdout].to_numpy(dtype='float32')
-        best_model.fit(final_train_X, final_train_Y)
-
-        # Final holdout evaluation
-        x_holdout = full_x.iloc[-holdout:].to_numpy(dtype='float32') 
-        
-        final_preds_holdout = best_model.predict(x_holdout)
-        
-        return best_model, final_preds_holdout, final_train_Y, cv_mae, cv_mase, cv_da, train_cv_mae, train_cv_mase
+        final_outliers = sorted(list(outliers_set))
+        return best_model, final_outliers, cv_mae, cv_mase, cv_da, train_cv_mae, train_cv_mase
     else:
         raise Exception("Failed to choose model.")
 
@@ -102,10 +118,11 @@ def RFTS(
     data:               pd.DataFrame,
     target_col:         str,
     holdout:            int,
-    outlier_threshold:  float = 2,
+    outlier_threshold:  float|None = 2,
     outlier_window:     int = 20,
     detection:          str = 'ewm',
     ewm_bounds:         list[float]|None = None,
+    mase_m:             int = 1,
     time_splits:        int = 5,
     min_samples_leaf:   int = 5,
     min_samples_split:  int = 5,
@@ -113,41 +130,52 @@ def RFTS(
     max_features:       float | Literal['sqrt', 'log2'] = 'sqrt',
     max_depth:          int = 10
 ) -> tuple:
-    
-    full_y = data[target_col]
-    
-    if detection=='rolling-z':
-        outliers = outlier.rolling_zscore(full_y, outlier_window, outlier_threshold)
-        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
-    elif detection=='iqr':
-        outliers = outlier.iqr(full_y, outlier_threshold)
-        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
-    elif detection=='ewm' and ewm_bounds is not None:
-        ewm_bounds_percentage_lower = 1-ewm_bounds[0]
-        ewm_bounds_percentage_upper = 1+ewm_bounds[1]
-        outliers = outlier.ewm(full_y, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper)
-        print(f'Total Outliers Detected: {len(outliers)}\n--------------------------')
-    elif detection is not None and not isinstance(detection, str):
-        raise ValueError("Outlier parameter must be of string type")
-    else: raise ValueError("Selection error")
 
-    full_y_filtered = full_y.drop(outliers.index)    
-    y_holdout = full_y_filtered.iloc[-holdout:].to_numpy(dtype='float32')
+    train_x, train_y, holdout_x, holdout_y = tools.prep_tree_model(data, target_col, holdout)
 
-    best_model, final_preds_holdout, final_train_Y, cv_mae, cv_mase, cv_da, train_cv_mae, train_cv_mase  = _train_rfts_model(
-        data, 
-        target_col, 
-        holdout, 
+    best_model, train_outliers_idx, cv_mae, cv_mase, cv_da, train_cv_mae, train_cv_mase  = _train_rfts_model(
+        train_x,
+        train_y,  
         time_splits, 
+        outlier_threshold,  
+        outlier_window,  
+        detection,          
+        ewm_bounds, 
+        mase_m,        
         min_samples_leaf, 
         min_samples_split, 
         n_estimators, 
         max_features, 
         max_depth
         )
+
+    if detection=='rolling-z':
+        holdout_outliers_idx = outlier.rolling_zscore(holdout_y, outlier_window, outlier_threshold).index
+        print(f'Holdout Outliers Detected: {len(holdout_outliers_idx)}\n--------------------------')
+    elif detection=='iqr':
+        holdout_outliers_idx = outlier.iqr(holdout_y, outlier_threshold).index
+        print(f'Holdout Outliers Detected: {len(holdout_outliers_idx)}\n--------------------------')
+    elif detection=='ewm' and ewm_bounds is not None:
+        ewm_bounds_percentage_lower = 1-ewm_bounds[0]
+        ewm_bounds_percentage_upper = 1+ewm_bounds[1]
+        holdout_outliers_idx = outlier.ewm(holdout_y, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper).index
+        print(f'Holdout Outliers Detected: {len(holdout_outliers_idx)}\n--------------------------')
+    elif detection is not None and not isinstance(detection, str):
+        raise ValueError("Outlier parameter must be of string type")
+    else: raise ValueError("Selection error")
     
-    final_holdout_mae, final_holdout_mase, final_holdout_da = tools.score_tree_model(full_y, holdout, y_holdout, final_preds_holdout, final_train_Y)
+    holdout_outliers_idx = list(holdout_outliers_idx)
+    train_y_filtered = train_y.drop(train_outliers_idx)
+    train_x_filtered = train_x.drop(train_outliers_idx)
+    holdout_x_filtered = holdout_x.drop(holdout_outliers_idx)
+    holdout_y_filtered = holdout_y.drop(holdout_outliers_idx)
     
+    best_model.fit(train_x_filtered, train_y_filtered)
+    holdout_preds = best_model.predict(holdout_x_filtered)
+
+
+
+    final_holdout_mae, final_holdout_mase, final_holdout_da = tools.score_tree_model(train_y_filtered, holdout_y_filtered, holdout_preds)
     print(f"Cross-validated MASE: {np.mean(cv_mase):.4f} (±{np.std(cv_mase):.4f})")
     print(f"Cross-validated MAE: {np.mean(cv_mae):.4f} (±{np.std(cv_mae):.4f})")
     print(f"Cross-validated DA: {np.nanmean(cv_da):.2f}% (±{np.nanstd(cv_da):.2f})") # Use nanmean/nanstd to handle NaNs
@@ -159,8 +187,8 @@ def RFTS(
     print(f"Final Holdout MAE: {final_holdout_mae:.4f}")
     print(f"Final Holdout Directional Accuracy: {final_holdout_da:.2f}%")
     if detection is not None and isinstance(detection,str):
-        return best_model, final_preds_holdout, outliers, cv_mae, cv_mase, train_cv_mae, train_cv_mase
-    else: return best_model, final_preds_holdout, cv_mae, cv_mase, train_cv_mae, train_cv_mase
+        return best_model, holdout_preds, train_outliers_idx, holdout_outliers_idx, cv_mae, cv_mase, train_cv_mae, train_cv_mase
+    else: return best_model, holdout_preds, cv_mae, cv_mase, train_cv_mae, train_cv_mase
         
 def RFTSOptim(data:pd.DataFrame,target_col:str, holdout:int,n_trials:int=30,pruner:bool=True,meta_weight=False)-> tuple:
     X = data.drop(target_col, axis=1).iloc[:-holdout].to_numpy(dtype="float32")
@@ -190,7 +218,7 @@ def RFTSOptim(data:pd.DataFrame,target_col:str, holdout:int,n_trials:int=30,prun
 
             model.fit(X_train_cv, y_train_cv)
             preds_cv = model.predict(X_test_cv)
-            mase = tools.mase(y_test_cv, preds_cv,y_train_cv,1)
+            mase = tools.mase(y_test_cv, y_train_cv, preds_cv, 1)
             mase_scores.append(mase)
             # trial.report(mean(mase_scores), step=len(mase_scores))  # Log progress
             # if pruner==True:

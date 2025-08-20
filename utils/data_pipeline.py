@@ -1,3 +1,12 @@
+import  os
+import sys
+
+# Get the directory of the current script (which is 'utils')
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Construct the full path to the JSON file
+data_path = os.path.join(current_dir, '..', 'data')
+
 import pandas as pd
 import json
 import numpy as np
@@ -6,13 +15,13 @@ from typing import List
 def data_explicit_preprocess(
     items:          list,
     read_path:      str|None = None,
-    file_path:      str = '../data/data.csv',
+    file_path:      str = f'{data_path}/data.csv',
     write_name:     str|None = None,
     interp_method:  str = 'linear' 
 ) -> pd.DataFrame:
     if type(read_path) is str:
         preprocessed_pricedata = pd.read_csv(
-                f'{read_path}', 
+                read_path, 
                 names = [
                 'timestamp', 'item_id', 'avgHighPrice', 'highPriceVolume',
                 'avgLowPrice', 'lowPriceVolyme', 'totalvol', 'wprice'
@@ -112,8 +121,8 @@ def data_explicit_preprocess(
 
 def data_preprocess2(
     read:               bool = True, 
-    filepath:           str = "../data", 
-    read_path:          str = "../data/processed_data.csv", 
+    filepath:           str = data_path, 
+    read_path:          str = f'{data_path}/processed_data.csv', 
     write:              bool = False, 
     interp_method:      str = 'linear', 
     filter_volume:      bool = True,
@@ -124,10 +133,10 @@ def data_preprocess2(
         try:
             df = pd.read_csv(
                 f'{read_path}',
-                names=[
-                    'item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice',
-                    'lowPriceVolume', 'timestamp', 'totalvol', 'wprice'
-                ]
+                names= ['timestamp', 'item_id', 'avgHighPrice', 
+                        'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 
+                        'totalvol', 'wprice'
+                    ]
             )
             print(f"Successfully loaded processed data from {read_path}")
             return df
@@ -159,7 +168,7 @@ def data_preprocess2(
         else:
             with open(f'{filepath}/data_properties_full.txt', "r") as file:
                 lines = file.readlines()
-        series_length = int(lines[1].replace("\n", ""))
+        series_length = int(lines[2].replace("\n", ""))
     except FileNotFoundError:
         print(f"Error: data_properties.txt not found at {filepath}. Cannot determine series_length.")
         # Fallback or raise error if series_length is critical and cannot be determined
@@ -253,7 +262,39 @@ def data_preprocess2(
     
     return processed_priced_data
 
-def alchemy_preprocess(read: bool, filepath: str = "../data", read_path: str = "../data/alchemy_data.csv", write: bool = False) -> pd.DataFrame:
+def data_preprocess_deprecated(read: bool, filepath: str = "./data", read_path: str = "../data/processed_data.csv", write: bool = False, interp_method: str = 'linear') -> pd.DataFrame:
+    ### Read has higher priority than write
+    if read:
+        df = pd.read_csv(f'{read_path}', names=['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp', 'totalvol', 'wprice'])
+        return df
+
+    #Load the data
+    raw_pricedata = pd.read_csv(f'{filepath}/data.csv', names=['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp'])
+    #Load the data properties
+    with open(f'{filepath}/data_properties.txt', "r") as file:
+        lines = file.readlines()
+        file.close()
+    series_length = int(lines[1].replace("\n", ""))
+
+    #Keep constantly only constantly traded items
+    group_raw_pricedata = raw_pricedata.groupby('item_id').nunique()
+    filtered_indexes = group_raw_pricedata[group_raw_pricedata['timestamp'] != series_length].index
+    raw_pricedata = raw_pricedata[~raw_pricedata['item_id'].isin(filtered_indexes)]
+    
+    # interpolate missing values
+    processed_priced_data = raw_pricedata.interpolate(method=interp_method)
+    
+    #Weighted average of High/Low Price by High/Low Volume
+    processed_priced_data['totalvol'] = processed_priced_data['highPriceVolume'] + processed_priced_data['lowPriceVolume']
+    processed_priced_data['wprice'] = (processed_priced_data['highPriceVolume']/processed_priced_data['totalvol']) * (processed_priced_data['avgHighPrice'] - processed_priced_data['avgLowPrice']) + processed_priced_data['avgLowPrice']
+
+    #Saving output
+    if write:
+        processed_priced_data.to_csv(f'{filepath}/processed_data.csv', mode='w', header=False, index=False)
+    
+    return processed_priced_data
+
+def alchemy_preprocess(read: bool, filepath: str = data_path, read_path: str = f'{data_path}/alchemy_data.csv', write: bool = False) -> pd.DataFrame:
     ### Read has higher priority than write
     if read:
         df = pd.read_csv(f'{read_path}', names=['item', 'price'], index_col=0)

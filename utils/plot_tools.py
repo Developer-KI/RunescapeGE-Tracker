@@ -10,7 +10,7 @@ from    utils.data_pipeline import alchemy_preprocess, data_preprocess2
 from    sklearn.metrics import mean_absolute_error
 from    matplotlib.gridspec import GridSpec
 from    statsmodels.tsa.api import SimpleExpSmoothing
-from    scipy.stats import norm, kurtosis, skew, shapiro, jarque_bera
+from    scipy.stats import norm, kurtosis, skew, jarque_bera
 import  pytz
 from    typing import cast
 print(os.getcwd())
@@ -89,6 +89,7 @@ def plot_features(
         title_to_use: str = "Y Over Time" if title is _DEFAULT_TITLE else cast(str, title)
         daytime_shade(y_slice)
     
+    ax.ticklabel_format(style='plain', useOffset=False)
     ax.set_title(title_to_use)
     ax.set_ylabel(ylab)
     plt.xticks(rotation=45)
@@ -172,6 +173,7 @@ def plot_feature_divergence(
     else: raise ValueError('Select a valid divergence type')
     daytime_shade(feature1_slice)
     ax.grid()
+    ax.ticklabel_format(style='plain', useOffset=False)
     plt.xticks(rotation=45)
     if show:
         plt.show()
@@ -241,12 +243,12 @@ def plot_classification_vs_price(hist_pricedata,hidden_states,item, model):
     plt.show()
 
 def plot_residuals(data: pd.DataFrame, model, lookback: int = 0) -> np.ndarray:
-    X = data.drop(data.columns[0], axis=1).to_numpy()
-    Y = data[data.columns[0]].to_numpy()
+    X = data.drop(data.columns[0], axis=1)
+    Y = data[data.columns[0]]
     adj_index = data.index[lookback:]
 
-    Y_pred = model.predict(X[lookback:])
-    residuals = Y[lookback:] - Y_pred
+    Y_pred = model.predict(X.iloc[lookback:])
+    residuals = Y.iloc[lookback:] - Y_pred
 
     plt.figure(figsize=(12, 6))
     plt.plot(adj_index, residuals, marker="o", markersize=2, linestyle="-", label="Residuals", color='green')
@@ -265,10 +267,13 @@ def plot_residuals(data: pd.DataFrame, model, lookback: int = 0) -> np.ndarray:
     plt.show()
     return residuals
 
+#TODO make sure statistics arent calculated on outliers
+# removed shapiro test
+
 def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookback: int = 0, fill_outliers=None, std_factor: float = 1.96):
     if fill_outliers is not None:
         Y = data[data.columns[0]].copy()
-        Y.loc[fill_outliers.index] = np.nan
+        Y.loc[fill_outliers] = np.nan
         Y=Y.ffill().to_numpy()
     else:
             Y = data[data.columns[0]].to_numpy()
@@ -281,10 +286,10 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
         print(f"Warning: 'lookback' ({lookback}) is greater than dataset size ({data.shape[0]}). Adjusting lookback to max size for plotting consistency.")
         lookback = data.shape[0]
         adj_index = time_index
-    if lookback < len(holdout_pred):
-        print(f"Warning: 'lookback' ({lookback}) is less than 'holdout' ({len(holdout_pred)}). Adjusting lookback to holdout value for plotting consistency.")
-        lookback = len(holdout_pred)
-        adj_index = time_index[-lookback:]
+    # if lookback < len(holdout_pred):
+    #     print(f"Warning: 'lookback' ({lookback}) is less than 'holdout' ({len(holdout_pred)}). Adjusting lookback to holdout value for plotting consistency.")
+    #     lookback = len(holdout_pred)
+    #     adj_index = time_index[-lookback:]
         
     # Determine the slice points for training/test and holdout periods
     training_test_plot_end_idx = lookback - len(holdout_pred) 
@@ -300,14 +305,14 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
     fig = plt.figure(figsize=(12, 10), constrained_layout=True) 
 
     if not isinstance(model, SimpleExpSmoothing):
-        X = data.drop(data.columns[0], axis=1).to_numpy()
+        X = data.drop(data.columns[0], axis=1)
 
         # Model predictions 
         #Keep in mind that this generates predictions for all folds from a final trained model
         #which is inherently leaking data *between* folds, as opposed to generating predictions from within each fold.
         #The leaking approach is good to examine the training fit given the maximum data, but cannot
         #help decide hyperparameters or compare performance between folds
-        Y_pred_full_lookback = model.predict(X[-lookback:]) 
+        Y_pred_full_lookback = model.predict(X.iloc[-lookback:]) 
 
         # Residual Calculation
         residuals_full_lookback = Y[-lookback:] - Y_pred_full_lookback #not sure if leaking
@@ -325,16 +330,20 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
         # **Row 1: Main Subplot - Predictions vs. Actual**
         ax_main = fig.add_subplot(gs[0, 0]) 
         ax_main.plot(adj_index, Y[-lookback:], marker="o", markersize=2, linestyle="-", label="Actual", color='white')
-        ax_main.plot(holdout_time_indices, holdout_pred, marker="o", markersize=2, linestyle="-", label="Predicted", color="red")
-        ax_main.fill_between(holdout_time_indices, lower_bound, upper_bound, color="#5DD4FF39", alpha=0.3,
+        ax_main.plot(holdout_time_indices[-lookback:], holdout_pred[-lookback:], marker="o", markersize=2, linestyle="-", label="Predicted", color="red")
+        ax_main.fill_between(holdout_time_indices[-lookback:], lower_bound[-lookback:], upper_bound[-lookback:], color="#5DD4FF39", alpha=0.3,
                                 label=f"{(stats.norm.cdf(std_factor) - stats.norm.cdf(-std_factor)) * 100:.2f}% Confidence Interval (Gaussian)")
         # Only plot outliers that are within the current plotting window
-        if fill_outliers is not None and not fill_outliers.empty:
-            # adj_index is your x-axis (timestamps), fill_outliers.index should be timestamps too
-            outlier_idx = np.intersect1d(adj_index, fill_outliers.index)
+        if fill_outliers:
+            outlier_timestamps_arr = np.array(fill_outliers)
+
+            visible_outlier_timestamps = np.intersect1d(adj_index, outlier_timestamps_arr)
+            
+            outlier_data = data.loc[visible_outlier_timestamps, data.columns[0]]
+            
             ax_main.plot(
-                outlier_idx,
-                fill_outliers.loc[outlier_idx],
+                outlier_data.index,
+                outlier_data,
                 'X', color='yellow', markersize=8, markeredgecolor='black', label='Detected Outliers'
             )
         # **Row 2: Residuals Subplot (Full Width, with color change)**
@@ -358,7 +367,6 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
         ax_hist.axvline(mu_norm, color='red', linestyle='-', linewidth=1)
 
         jb_stat, jb_p_value= jarque_bera(residuals_holdout_for_plot)
-        shapiro_stat, shapiro_p_value = shapiro(residuals_holdout_for_plot)
         
         textstr = '\n'.join((
             r'$\mu$: %.4f' % (mu_norm,),
@@ -366,7 +374,6 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
             r'Skewness: %.3f' % (skew(residuals_holdout_for_plot),),
             r'Kurtosis: %.3f' % (kurtosis(residuals_holdout_for_plot),),
             r'Jaque-Bera: %.3f (p=%.3f)' % (jb_stat,jb_p_value),
-            r'Shapiro-Wilk: %.3f (p=%.3f)' % (shapiro_stat,shapiro_p_value)
         ))
         props = dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.6)
         ax_hist.text(0.02, 0.98, textstr, transform=ax_hist.transAxes, fontsize=10,

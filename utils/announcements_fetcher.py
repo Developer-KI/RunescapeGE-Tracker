@@ -1,8 +1,19 @@
 #%%
+import  os
+import sys
+# Get the absolute path of the current file's directory
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Go up one level to reach the project root
+project_root = os.path.join(current_dir, '..')
+# Add the project root to the system path
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+# Construct the full, absolute path to the cache file
+cache_path = os.path.join(current_dir, '..', 'data', 'announcements_cache.csv')
+    
+
 import  pandas as pd, numpy as np
-import  sys,os
-project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
-if project_root not in sys.path: sys.path.append(project_root)
 import  requests
 from    bs4 import BeautifulSoup
 from    datetime import date
@@ -53,6 +64,8 @@ def _webpage_request(session: requests.Session, month: int, year: int) -> str:
     except requests.exceptions.RequestException as e:
         print(f"Error fetching data for {year}-{month}: {e}")
         return ""
+
+#TODO Research announcements timezones, fix function issues
 
 def _get_announcements_new(months_ago: int|None = None, years_ago: int|None = None) -> List[pd.Timestamp]:
     """
@@ -107,7 +120,7 @@ def _get_announcements_new(months_ago: int|None = None, years_ago: int|None = No
 
     return timestamp_list
 
-def get_announcements(cache_file_path='../data/announcements_cache.csv', scrape: bool = False) -> pd.DataFrame:
+def get_announcements(cache_file_path=cache_path, scrape: bool = False) -> pd.DataFrame:
     """
     Handles caching logic for the get_announcements function.
     Reads from cache if available, appends new data, and saves.
@@ -151,7 +164,7 @@ def get_announcements(cache_file_path='../data/announcements_cache.csv', scrape:
         print("No cache file found. Performing full scrape...")
         # Perform   a full scrape from the beginning
         full_timestamps = _get_announcements_new(months_ago=None, years_ago=None)
-        full_df = pd.DataFrame(full_timestamps, columns=['timestamp'])
+        full_df = pd.DataFrame(full_timestamps, columns=['timestamp']).drop_duplicates()
         
         full_df.to_csv(cache_file_path, index=False)
         print("Done!")
