@@ -53,8 +53,8 @@ def _train_rfts_model(
             y_train_outliers = outlier.iqr(y_train_cv, outlier_threshold)
             y_test_outliers = outlier.iqr(y_test_cv, outlier_threshold)
         elif detection=='ewm' and ewm_bounds is not None:
-            ewm_bounds_percentage_lower = 1-ewm_bounds[0]
-            ewm_bounds_percentage_upper = 1+ewm_bounds[1]
+            ewm_bounds_percentage_lower = ewm_bounds[0]
+            ewm_bounds_percentage_upper = ewm_bounds[1]
             y_train_outliers = outlier.ewm(y_train_cv, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper)
             y_test_outliers = outlier.ewm(y_test_cv, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper)
         elif detection is not None and not isinstance(detection, str):

@@ -38,8 +38,8 @@ def ewm(
     Parameters:
     - full_y (pd.Series): The data to analyze.
     - smoothing (int): The span for the EWMA calculation.
-    - upper_bound (float): Multiplicative scaling factor above given series.
-    - lower_bound (float): Multiplicative scaling factor below given series.
+    - upper_bound (float): Proportion above given series.
+    - lower_bound (float): Proportion below given series.
     
     Returns:
     - pd.Series: The data points identified as outliers.
@@ -50,10 +50,10 @@ def ewm(
     outlier_mask = pd.Series(False, index=full_y.index)
     
     if upper_bound is not None:
-        upper_outliers_mask = full_y > ewm_series * upper_bound
+        upper_outliers_mask = full_y > ewm_series * (1+upper_bound)
         outlier_mask = outlier_mask | upper_outliers_mask
     if lower_bound is not None:
-        lower_outliers_mask = full_y < ewm_series * lower_bound
+        lower_outliers_mask = full_y < ewm_series * (1-lower_bound)
         outlier_mask = outlier_mask | lower_outliers_mask
         
     return full_y[outlier_mask]

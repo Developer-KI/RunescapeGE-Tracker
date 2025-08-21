@@ -168,63 +168,43 @@ price_matrix_items, _ = item_data(price_data)
 #%%
 #price_corr = item_corr(price_matrix_items)
 #%%
-print(f'{item_name(555)} and {item_name(2)} Engle-Granger p-value: {coint(price_matrix_items[555], price_matrix_items[2])[1]}')
-print(f'{item_name(555)} and {item_name(2)} Engle-Granger p-value: {coint(price_matrix_items[555], price_matrix_items[2])[1]}')
-#%%
+def cointegration_pairs(scrape: bool = False) -> pd.DataFrame|None:
+    df = pd.read_csv(cointegration_path)
+    if not scrape:
+        return df
+    else:
+        processed_pairs = set()
 
+        if os.path.exists(cointegration_path):
+            print(f"Existing file found. Resuming from last run.")
+            with open(cointegration_path, 'r', newline='') as f:
+                reader = csv.reader(f)
+                header = next(reader) # Skip the header row
+                for row in reader:
+                    if len(row) >= 2:
+                        # Add the pair to our set for quick lookups
+                        processed_pairs.add((row[0], row[1]))
+        else:
+            print("No existing file found. Starting a new run.")
 
-# with open(cointegration_path, 'w', newline='') as f:
-#     writer = csv.writer(f)
-#     writer.writerow(['item1', 'item2', 'p_value'])
-    
-#     for item1, item2 in combinations(price_matrix_items.columns, 2):
-#         try:
-#             test_result = coint(price_matrix_items[item1], price_matrix_items[item2])
-#             p_value = test_result[1]
+        with open(cointegration_path, 'a', newline='') as f:
+            writer = csv.writer(f)
 
-#             print(f'{item_name(item1)} and {item_name(item2)} p-value: {p_value}')
+            if os.path.getsize(cointegration_path) == 0:
+                writer.writerow(['item1','item2','p_value'])
 
-#             writer.writerow([item1, item2, p_value])
-        
-#         except Exception as e:
-#             print(f"An error occurred while testing pair ({item1}, {item2}): {e}")
-#             writer.writerow([item1, item2, "ERROR"])
+            for item1, item2 in combinations(price_matrix_items.columns, 2):
+                if (str(item1), str(item2)) in processed_pairs or (str(item2), str(item1)) in processed_pairs:
+                    continue  # Skip to the next pair
 
-#%%
+                try:
+                    test_result = coint(price_matrix_items[item1], price_matrix_items[item2])
+                    p_value = test_result[1]
+                    print(f'{item_name(item1)} and {item_name(item2)} p-value: {p_value}')
+                    writer.writerow([item1, item2, p_value])
+                except Exception as e:
+                    print(f"An error occurred while testing pair ({item1}, {item2}): {e}")
+                    writer.writerow([item1, item2, "ERROR"])
 
-
-processed_pairs = set()
-
-if os.path.exists(cointegration_path):
-    print(f"Existing file found. Resuming from last run.")
-    with open(cointegration_path, 'r', newline='') as f:
-        reader = csv.reader(f)
-        header = next(reader) # Skip the header row
-        for row in reader:
-            if len(row) >= 2:
-                # Add the pair to our set for quick lookups
-                processed_pairs.add((row[0], row[1]))
-else:
-    print("No existing file found. Starting a new run.")
-
-with open(cointegration_path, 'a', newline='') as f:
-    writer = csv.writer(f)
-
-    if os.path.getsize(cointegration_path) == 0:
-        writer.writerow(['item1', 'item2', 'p_value'])
-
-    for item1, item2 in combinations(price_matrix_items.columns, 2):
-        if (str(item1), str(item2)) in processed_pairs or (str(item2), str(item1)) in processed_pairs:
-            continue  # Skip to the next pair
-
-        try:
-            test_result = coint(price_matrix_items[item1], price_matrix_items[item2])
-            p_value = test_result[1]
-            print(f'{item_name(item1)} and {item_name(item2)} p-value: {p_value}')
-            writer.writerow([item1, item2, p_value])
-        except Exception as e:
-            print(f"An error occurred while testing pair ({item1}, {item2}): {e}")
-            writer.writerow([item1, item2, "ERROR"])
-
-print("\nScript finished. All cointegration tests are now complete.")
-# %%
+        print("\nScript finished. All cointegration tests are now complete.")
+    # %%

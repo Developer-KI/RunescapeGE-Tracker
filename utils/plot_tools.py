@@ -83,13 +83,13 @@ def plot_features(
         x_slice = tools.ensure_datetime_index(x).loc[start:end]
         ax.plot(x_slice, y_slice)
         ax.set_xlabel(xlab)
+        ax.ticklabel_format(style='plain', useOffset=False)
         title_to_use: str = "X against Y" if title is _DEFAULT_TITLE else cast(str, title)
     else:
         ax.plot(y_slice)
         title_to_use: str = "Y Over Time" if title is _DEFAULT_TITLE else cast(str, title)
         daytime_shade(y_slice)
     
-    ax.ticklabel_format(style='plain', useOffset=False)
     ax.set_title(title_to_use)
     ax.set_ylabel(ylab)
     plt.xticks(rotation=45)
