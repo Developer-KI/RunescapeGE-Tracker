@@ -151,47 +151,36 @@ def writing_returns(filepath: str = "./data/data.csv", n_periods: int = 100, p_c
     first_call_timestamp = timestamp_start
     last_call_timestamp = 0
 
-    iter = 0    #accounts for dropped API calls
+    iteration = 0    #accounts for dropped API calls
     for t in range(0, p_chunks):
         try:
             #Fetching Logic
-            time_to_present = int(datetime.now().timestamp()) - (timestamp_start - direction * ((t * n_periods) * 300))
             df_t = fetch_historical_5m(n = n_periods, timestamp=timestamp_start - direction * ((t * n_periods) * 300))
             if df_t.empty:
                 continue
-            iter += 1
-            last_call_timestamp = df_t.iloc[-1]['timestamp']
-            first_call_timestamp = df_t.iloc[1]['timestamp']
+            iteration += 1        
             df_t = df_t[['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp']]
             df_t.to_csv(filepath, mode='a', header=False, index=False)
 
-            # Determine first and last timestamps for this chunk
-            current_first_call_timestamp = df_t.iloc[0]['timestamp']
-            current_last_call_timestamp = df_t.iloc[-1]['timestamp']
-
-            # Update overall timestamps based on mining direction
-            if direction == 1: # Backward mining
-                if t == 0: # For the first chunk, the start is the initial timestamp
-                    first_call_timestamp = timestamp_start
-                last_call_timestamp = current_last_call_timestamp
-            else: # Forward mining
-                if t == 0:
-                    last_call_timestamp = timestamp_start
-                first_call_timestamp = current_first_call_timestamp
-
-            # Update series length based on direction
-            if direction == 1:
-                series_length += n_periods
+            series_length += df_t.groupby("timestamp").ngroups
+        
+            #Keeping tabs of timestamp start/end data in data properties
+            if mining_forward==True:
+                last_call_timestamp = int(lines[1].strip())
+                first_call_timestamp = df_t.iloc[0]['timestamp']
+            elif mining_forward==False and series_length == 0:
+                first_call_timestamp = int(datetime.now().timestamp()) - int(datetime.now().timestamp()) % 300
+                last_call_timestamp = first_call_timestamp
             else:
-                # Assuming you handle this logic correctly, this can stay as is
-                series_length += n_periods
+                first_call_timestamp = int(lines[0].strip())
+                last_call_timestamp = df_t.iloc[-1]['timestamp']
 
-            # Saving to data properties
+            #Saving to data properties
             with open("./data/data_properties.txt", "w") as file:
                 file.write(f"{first_call_timestamp}\n")
                 file.write(f"{last_call_timestamp}\n")
                 file.write(f"{series_length}\n")
-            print(f"{(iter) * n_periods} queries added! Time: {last_call_timestamp}")
+            print(f"{(iteration) * n_periods} queries added! Time: {last_call_timestamp}")
 
             #Forward Mining reaching present redundency break
             if mining_forward == True and last_call_timestamp - first_call_timestamp == 0:
@@ -209,21 +198,6 @@ def writing_returns(filepath: str = "./data/data.csv", n_periods: int = 100, p_c
         df = df.drop_duplicates()
         df.to_csv(filepath, mode='w', header=False, index=False)
         print("Handled Duplicates")
-
-def fetch_historical_common_index() -> pd.DataFrame:
-    url = f"https://api.weirdgloop.org/exchange/history/osrs/all?id=GE%20Common%20Trade%20Index"
-    response = requests.get(url, headers=headers)
-
-    if response.status_code == 200:
-        data = response.json()
-
-        records = data["GE Common Trade Index"]
-        df = pd.DataFrame(records)
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-
-        return df
-    else:
-        raise Exception("Failed to fetch data")
 
 def fetch_historical_food_index() -> pd.DataFrame:
     url = f"https://api.weirdgloop.org/exchange/history/osrs/all?id=GE%20Food%20Index"
@@ -323,5 +297,5 @@ def fetch_latest_idex_df():
 #%%
 if __name__ == "__main__":
     #writing_returns(n=10, p=500, timestamp=1747701935,del_duplicates=False)
-    writing_returns(n_periods=10, p_chunks=2500,del_duplicates=False, mining_forward=False)
+    writing_returns(n_periods=2, p_chunks=2,del_duplicates=False, mining_forward=True)
 #run as .py file
