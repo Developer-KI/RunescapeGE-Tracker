@@ -27,10 +27,10 @@ import  utils.data_pipeline as pipeline
 import  pytz
 from    data.bosstables import bosstables_list as BOSSTABLES_LIST
 import  utils.api_fetcher as api
-from    utils.announcements_fetcher import get_announcements
+#from    utils.announcements_fetcher import get_announcements
 from statsmodels.tsa.stattools import coint
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
-from arch.unitroot.cointegration import phillips_ouliaris
+#from arch.unitroot.cointegration import phillips_ouliaris
 from itertools import combinations
 #%% General Prices
 price_data = pipeline.data_preprocess2(read=True, write=False, interp_method='linear', filter_volume=True, filter_threshold=0.98)
@@ -161,8 +161,8 @@ def updates_announcements(price_matrix_items: pd.DataFrame) -> tuple[pd.Datetime
     updates_hours_since.index = price_matrix_items.index
     updates_days_since.index = price_matrix_items.index
 
-    announcements = get_announcements()['timestamp'].dt.tz_localize('US/Eastern').dt.date #UTC assumption !!!
-    return update_dates, updates_hours_since, updates_days_since, announcements
+  #  announcements = get_announcements()['timestamp'].dt.tz_localize('US/Eastern').dt.date #UTC assumption !!!
+   # return update_dates, updates_hours_since, updates_days_since, announcements
 #%%
 price_matrix_items, _ = item_data(price_data)
 #%%

@@ -15,7 +15,7 @@ from typing import List
 def data_explicit_preprocess(
     items:          list,
     read_path:      str|None = None,
-    file_path:      str = f'{data_path}/data.csv',
+    file_path:      str = os.path.join(data_path, 'data.csv'),
     write_name:     str|None = None,
     interp_method:  str = 'linear' 
 ) -> pd.DataFrame:
@@ -33,7 +33,7 @@ def data_explicit_preprocess(
     elif not isinstance(read_path, (str, type(None))): raise ValueError("Argument read_path should be of None or string") 
 
     raw_pricedata =  pd.read_csv(
-            f'{file_path}', 
+            file_path, 
             names = [
                 'item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice',
                 'lowPriceVolume', 'timestamp', 'totalvol', 'wprice'      
@@ -122,7 +122,7 @@ def data_explicit_preprocess(
 def data_preprocess2(
     read:               bool = True, 
     filepath:           str = data_path, 
-    read_path:          str = f'{data_path}/processed_data.csv', 
+    read_path:          str = os.path.join(data_path, 'processed_data.csv'), 
     write:              bool = False, 
     interp_method:      str = 'linear', 
     filter_volume:      bool = True,
