@@ -9,14 +9,8 @@ json_path = os.path.join(current_dir, '..', 'data', 'nameID.json')
 import  pandas as pd
 import  numpy as np
 import  matplotlib.pyplot as plt
-import  utils.api_fetcher as fetcher
 import  scipy.stats as stats
-from    matplotlib.ticker import MaxNLocator, ScalarFormatter
-from    utils.data_pipeline import alchemy_preprocess
 from    sklearn.metrics import mean_absolute_error
-from    matplotlib.gridspec import GridSpec
-from    statsmodels.tsa.api import SimpleExpSmoothing
-from    scipy.stats import norm, kurtosis, skew, shapiro, jarque_bera
 from    typing import TypeVar, cast, Dict
 from    datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
@@ -221,18 +215,18 @@ def mase(y_true:    pd.Series|np.ndarray,
         print(f"WARNING: y_train length ({len(y_train)}) is too short for period m={m}.")
     return mae_model/np.maximum(naive_mae, np.finfo(np.float64).eps)
 
-def calculate_returns(price_series: pd.Series, return_periods: str|None = None) -> pd.Series:
+def calculate_returns(price_series: pd.Series|pd.DataFrame, return_periods: str|None = None) -> pd.Series|pd.DataFrame:
     """
     Calculates returns for a given price series, handling both base returns and resampling.
     """
-    base_returns = price_series.pct_change().dropna()
+    base_returns = price_series/price_series.shift(1).dropna()
 
     if return_periods is None or return_periods.lower() == '5m':
         return base_returns
     
     elif isinstance(return_periods, str):
         try:
-            compound_returns = (1 + base_returns).resample(return_periods).prod() - 1
+            compound_returns = (base_returns).resample(return_periods).prod()
             return compound_returns
         except Exception as e:
             raise ValueError(f"Invalid resample rule '{return_periods}'. Error: {e}")
@@ -320,15 +314,6 @@ def create_item_index(data: pd.DataFrame|list, items:list[int], type:str, base_v
         return index_volume_weight
     else: raise ValueError("Select valid index type")
 
-def volatility_market(price_data: pd.DataFrame, smoothing: int = 20) -> pd.Series:
-    #Aggregate volatility
-    volatilityitems = price_data.rolling(window=smoothing).std().shift(1)
-    volatilitymarket = volatilityitems.sum(axis=1)
-    #Scaling
-    volatilitymarket = volatilitymarket/price_data.shape[1]
-
-    return volatilitymarket.rename('market_vix')[smoothing:]
-
 def rsi(price_data: pd.Series, periods: int) -> pd.Series:
     
     delta = price_data.diff(1)
@@ -353,3 +338,52 @@ def rsi(price_data: pd.Series, periods: int) -> pd.Series:
     rsi[avg_loss_smoothed == 0] = 100
     
     return rsi
+
+def hurst(data: pd.Series) -> float:
+    for n in range(10, 100, 10):
+        # Skip if n is not an integer divisor of the data length.
+        # This is not strictly necessary but ensures clean chunks.
+        if 1000 % n != 0:
+            continue
+        
+        # Divide the series into n chunks
+        chunks = np.array_split(data, 1000 // n)
+
+        # Calculate the mean and standard deviation for each chunk
+        rs_n = []
+        for chunk in chunks:
+            mean_chunk = chunk.mean()
+            std_chunk = chunk.std()
+            
+            # Calculate cumulative deviations from the mean
+            cumulative_deviation = np.cumsum(chunk - mean_chunk)
+            
+            # Calculate the rescaled range
+            # Use a small value to avoid division by zero for flat chunks
+            if std_chunk != 0:
+                rs_n.append((np.max(cumulative_deviation) - np.min(cumulative_deviation)) / std_chunk)
+
+        if rs_n:
+            rs_values.append(np.mean(rs_n))
+            n_values.append(n)
+
+    # Now, you have the n_values and their corresponding average R/S values.
+    # The Hurst exponent is the slope of the line that fits the
+    # log-log plot of these values.
+    log_rs = np.log(rs_values)
+    log_n = np.log(n_values)
+
+    # Use polyfit to find the slope (Hurst exponent)
+    hurst_exponent = np.polyfit(log_n, log_rs, 1)[0]
+    return hurst_exponent
+
+def volatility_market(price_data: pd.DataFrame, aggregation: str|None = None, smoothing: int = 20) -> pd.Series:
+    #Aggregate volatility
+    volatility_items = calculate_returns(price_data, aggregation)
+    volatility_items = price_data.rolling(window=smoothing).std().dropna()
+    volatility_sum = volatility_items.sum(axis=1)
+    #Scaling
+    volatility_market = volatility_sum/price_data.shape[1]
+    volatility_market.name = 'market_vix'
+
+    return volatility_market

@@ -3,25 +3,16 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
 import os
 import sys
 project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
 if project_root not in sys.path: sys.path.append(project_root)
-from   utils.data_pipeline import data_preprocess2, volatility_market, alchemy_preprocess
-from   utils.model_tools import item_name
+from   utils.model_tools import item_name, volatility_market
 import utils.plot_tools as myplot
-from   scipy.stats import norm, t, kurtosis, skew, shapiro, jarque_bera, probplot
+from   scipy.stats import norm, t, kurtosis, skew, jarque_bera, probplot, skewtest
 import seaborn as sns
 import utils.model_tools as tools
-from testing.feature_engineering import (
-    price_matrix_items as PRICE_MATRIX_ITEMS,
-    vol_matrix_items as VOLUME_MATRIX_ITEMS,
-    vol_corr as VOLUME_CORR,
-    price_corr as PRICE_CORR,
-    market_index_equal_weight as MARKET_INDEX_EQUAL_WEIGHT,
-    market_index_volume_weight as MARKET_INDEX_VOLUME_WEIGHT
-)
+import testing.feature_engineering as get
 
 plt.rcParams.update({
     "figure.facecolor": "#000000",  
@@ -35,42 +26,48 @@ plt.rcParams.update({
     "legend.labelcolor": "#A1A1A1",
     "axes.titlecolor": "#A1A1A1"
 })
+#%%
+price_data = get.price_data
+price_matrix_items, vol_matrix_items = get.item_data(price_data, True)
+price_matrix_items = price_matrix_items.iloc[1000:30000]
+vol_matrix_items = vol_matrix_items.iloc[1000:30000]
 
-
+equal_index, vprice_index = get.market_indices(price_matrix_items, vol_matrix_items)
+_, boss_matrix_items, boss_vol_matrix_items = get.boss_data()
+# price_corr, vol_corr = get.item_corr(price_matrix_items, vol_matrix_items)
 # %%
 #Price and Volume Time series
-totalvolume_time = VOLUME_MATRIX_ITEMS.iloc[:,1:].sum(axis=1)
+totalvolume_time = vol_matrix_items.iloc[:,1:].sum(axis=1)
 
-item1 = np.random.choice(PRICE_MATRIX_ITEMS.columns)
-item2 = np.random.choice(PRICE_MATRIX_ITEMS.columns)
-item= np.random.choice(PRICE_MATRIX_ITEMS.columns)
+item1 = np.random.choice(price_matrix_items.columns)
+item2 = np.random.choice(price_matrix_items.columns)
+item= np.random.choice(price_matrix_items.columns)
+
 start = 20
-market_volatility = volatility_market(PRICE_MATRIX_ITEMS, smoothing=start)
-vix_index= market_volatility.iloc[start:].index
-plot_index = pd.to_datetime(market_volatility.iloc[:].index, unit='s')
-
-#%% Item Volatility 
-lookback=return_period=400 #288 daily
-item_price= PRICE_MATRIX_ITEMS[item]
-# log_returns=np.log(1+item_price.pct_change(return_period).dropna())
-volatility = PRICE_MATRIX_ITEMS[item].rolling(return_period).std().dropna()[1+lookback:] #dropped first to match pct_change of log_returns + lookback shift
-
-myplot.plot_features(volatility, ylab='Standard Deviations (GP)', title=fr'$\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Volatility')
+market_volatility = volatility_market(price_matrix_items, smoothing=start, aggregation="h")
 #%% Market Volatility Plot
 myplot.plot_features(market_volatility, title=fr"OSRS $\mathbf{{{round((market_volatility.shape[0]*5)/(60*24),1)}}}$ Day Market Volatility", ylab="Standard Deviation (SD)")
+#%% Item Volatility 
+smoothing = 5
+item_price= price_matrix_items[item]
+returns = tools.calculate_returns(item_price, "h")
+log_returns = np.log(returns)
+returns_volatility = log_returns.rolling(smoothing).std().dropna() 
+#%%
+myplot.plot_features(returns_volatility, ylab='Standard Deviations (GP)', title=fr'$\mathbf{{{item_name(item)}}}$ [{item}] Volatility')
 #%% Leverage Effect (Returns vs Volatility)
 plt.figure(figsize=(10,5))
-plt.title(fr'$\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Volatility vs. $\mathbf{{{return_period}}}$-Period Lagged $\mathbf{{{lookback}}}$ Returns')
-plt.scatter(volatility, log_returns[volatility.index].shift(lookback), alpha=0.5, color='skyblue', edgecolor='black')
+plt.title(fr'$\mathbf{{{item_name(item)}}}$ [{item}] Volatility vs. Log Returns')
+plt.scatter(returns_volatility, returns[smoothing-1:], alpha=0.5, color='skyblue', edgecolor='black')
 plt.xlabel('Market Volatility')
 plt.ylabel('Log Returns')
 plt.grid()
 plt.show()
 
 #%% Total Volume Plot 
-myplot.plot_features(totalvolume_time, ylab="Volume of Market Trade", title=fr"$\mathbf{{{round((market_volatility.shape[0]*5)/(60*24),1)}}}$ Day Market Volume of the $\mathbf{{{VOLUME_MATRIX_ITEMS.shape[1]}}}$ Most Traded Items")
+myplot.plot_features(totalvolume_time, ylab="Volume of Market Trade", title=fr"$\mathbf{{{round((market_volatility.shape[0]*5)/(60*24),1)}}}$ Day Market Volume of the $\mathbf{{{vol_matrix_items.shape[1]}}}$ Most Traded Items")
 #%% Item Volume
-myplot.plot_features(VOLUME_MATRIX_ITEMS[item], ylab='Volume',title=fr"$\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{round((market_volatility.shape[0]*5)/(60*24),1)}}}$ Day Market Volume")
+myplot.plot_features(vol_matrix_items[item], ylab='Volume',title=fr"$\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{round((market_volatility.shape[0]*5)/(60*24),1)}}}$ Day Market Volume")
 
 #%% Item Price vs Alchemy Price Plot
 #219, 12934, 
@@ -83,7 +80,7 @@ myplot.plot_recent_alch_vs_price(item1)
 return_period=140 #288 daily
 #aggregation to larger timeframe vs. lagged (and overlapping) periods for >1
 log_returns=np.log(1+item_price.pct_change(return_period).dropna())
-#log_returns=np.log(1+PRICE_MATRIX_ITEMS[item_price].resample('D').last().dropna()) #daily aggregation
+#log_returns=np.log(1+price_matrix_items[item_price].resample('D').last().dropna()) #daily aggregation
 #%%
 
 lower_bound = np.percentile(log_returns, 0.1)
@@ -95,7 +92,7 @@ plt.ylabel('Returns Density')
 plt.xlim(lower_bound, upper_bound)
 plt.axvline(0, color='white', linestyle='-', linewidth=1)
 plt.yscale('log')
-plt.title(fr"$\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{return_period}}}$-Period Log Return Distribution") #ignore period for aggregated (?)
+plt.title(fr"$\mathbf{{{item_name(item)}}}$ [{item}] Log Return Distribution") #ignore period for aggregated (?)
 
 
 plt.hist(log_returns, bins='fd', color='skyblue', edgecolor='black', alpha=0.7, density=True)
@@ -112,15 +109,15 @@ ax.plot(x_plot, pdf_t, 'g-', linewidth=1, label='Student\'s t')
 #Info Box
 
 jb_stat, jb_p_value= jarque_bera(log_returns)
-shapiro_stat, shapiro_p_value = shapiro(log_returns)
+#significance test of skew (Z-test 2 tail)
+skew_z_score, skew_p_value = skewtest(log_returns)
 
 textstr = '\n'.join((
     r'$\mu$: %.4f' % (mu_norm,),
     r'$\sigma$: %.4f' % (std_norm,),
-    r'Skewness: %.3f' % (skew(log_returns),),
+    r'Skewness: %.3f (p=%.3f)' % (skew(log_returns), skew_p_value),
     r'Kurtosis: %.3f' % (kurtosis(log_returns),),
     r'Jaque-Bera: %.3f (p=%.3f)' % (jb_stat,jb_p_value),
-    r'Shapiro-Wilk: %.3f (p=%.3f)' % (shapiro_stat,shapiro_p_value)
 ))
 props = dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.6)
 ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=10,
@@ -151,22 +148,22 @@ plt.xlabel('Theoretical Quantiles')
 plt.grid()
 plt.show()
 # %%
-myplot.plot_features(PRICE_MATRIX_ITEMS[item1],start= '2025-05-10',end= '2025-05-11')
+myplot.plot_features(price_matrix_items[item1],start= '2025-05-10',end= '2025-05-11')
 #%% Market Indices
-myplot.plot_features(MARKET_INDEX_EQUAL_WEIGHT)
+myplot.plot_features(equal_index)
 #%%
-myplot.plot_features(MARKET_INDEX_VOLUME_WEIGHT)
+myplot.plot_features(equal_index)
 # %% Volume History 
-myplot.plot_features(VOLUME_MATRIX_ITEMS[item1],start= '2025-05-10',end= '2025-05-11')
+myplot.plot_features(vol_matrix_items[item1],start= '2025-05-10',end= '2025-05-11')
 # %% Correlations
-sns.heatmap(PRICE_MATRIX_ITEMS.iloc[:,1:10].corr(), annot=True, cmap='coolwarm', fmt=".2f")
+sns.heatmap(price_matrix_items.iloc[:,1:10].corr(), annot=True, cmap='coolwarm', fmt=".2f")
 #%%
-sns.heatmap(VOLUME_MATRIX_ITEMS.iloc[:,15:30].corr(), annot=True, cmap='coolwarm', fmt=".2f")
+sns.heatmap(vol_matrix_items.iloc[:,15:30].corr(), annot=True, cmap='coolwarm', fmt=".2f")
 #%% Item Beta
-myplot.plot_item_market_divergence(PRICE_MATRIX_ITEMS, item1, MARKET_INDEX_VOLUME_WEIGHT)
+myplot.plot_item_market_divergence(price_matrix_items, item1, vprice_index)
 #%%
-myplot.plot_item_market_divergence(PRICE_MATRIX_ITEMS, item1, MARKET_INDEX_EQUAL_WEIGHT)
-print(f'Beta: {tools.beta(PRICE_MATRIX_ITEMS, item1, MARKET_INDEX_EQUAL_WEIGHT)}')
+myplot.plot_item_market_divergence(price_matrix_items, item1, equal_index)
+print(f'Beta: {tools.beta(price_matrix_items, item1, equal_index)}')
 #%% Pair Divergence
-myplot.plot_feature_divergence(PRICE_MATRIX_ITEMS[item1], PRICE_MATRIX_ITEMS[item2], 'z', window=60,start= '2025-05-10',end= '2025-05-11')
+myplot.plot_feature_divergence(price_matrix_items[item1], price_matrix_items[item2], 'z', window=60,start= '2025-05-10',end= '2025-05-11')
 #%%

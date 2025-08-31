@@ -322,16 +322,6 @@ def alchemy_preprocess(read: bool, filepath: str = data_path, read_path: str = f
 
     return reference
 
-def volatility_market(price_data: pd.DataFrame, smoothing: int = 20) -> pd.Series:
-    #Aggregate volatility
-    volatilityitems = price_data.rolling(window=smoothing).std()
-    volatilitymarket = volatilityitems.sum(axis=1)
-    #Scaling
-    corr_price_market = price_data.corr()
-    volatilitymarket = volatilitymarket/corr_price_market.shape[1]
-
-    return pd.DataFrame(volatilitymarket, columns=['market_vix'])
-
 if __name__ == "__main__":
     test = data_preprocess2(read=False, write=True) #run in interactive
 

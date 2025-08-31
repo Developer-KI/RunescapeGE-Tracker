@@ -27,7 +27,7 @@ import  utils.data_pipeline as pipeline
 import  pytz
 from    data.bosstables import bosstables_list as BOSSTABLES_LIST
 import  utils.api_fetcher as api
-#from    utils.announcements_fetcher import get_announcements
+from    utils.announcements_fetcher import get_announcements
 from statsmodels.tsa.stattools import coint
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 #from arch.unitroot.cointegration import phillips_ouliaris
@@ -36,26 +36,30 @@ from itertools import combinations
 price_data = pipeline.data_preprocess2(read=True, write=False, interp_method='linear', filter_volume=True, filter_threshold=0.98)
 price_data = price_data.set_index('timestamp')
 #%%
-def item_data(price_data, datetime: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
+def item_data(price_data, wprice: bool = True, datetime: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
     #unix time conversion & localization
     if datetime:
         #possible silent failure inconsistent feature localization, check pipeline, site/api
         price_data.index = pd.to_datetime(price_data.index, unit='s', utc=True).tz_convert(pytz.timezone('US/Eastern')) 
-    price_matrix_items = price_data.pivot(columns="item_id", values="wprice") #hmmmm
+    if wprice:
+        price_matrix_items = price_data.pivot(columns="item_id", values="wprice") #hmmmm
+    else:
+        price_matrix_items = price_data.pivot(columns="item_id", values=["avgLowPrice","avgHighPrice"])
     vol_matrix_items = price_data.pivot(columns="item_id", values="totalvol")
     return price_matrix_items, vol_matrix_items
 
 #Boss Items
-def boss_data(datetime: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
+def boss_data(datetime: bool = True) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     boss_ids= set([item for sublist in BOSSTABLES_LIST for item in sublist]) #set conversion drops dupelicates
     boss_data = pipeline.data_explicit_preprocess( #refine argument handling
         boss_ids, 
         read_path= boss_file_path
     )
     boss_matrix_items = boss_data.pivot(index="timestamp", columns="item_id", values="wprice")
+    boss_vol_matrix_items = boss_data.pivot(index="timestamp", columns="item_id", values="totalvol")
     if datetime:
         boss_matrix_items.index = pd.to_datetime(boss_matrix_items.index, unit='s', utc=True).tz_convert('US/Eastern')
-    return boss_data, boss_matrix_items
+    return boss_data, boss_matrix_items, boss_vol_matrix_items
 # bandos_index = tools.create_item_index(boss_matrix_items,[
 # tools.item_name("Bandos chestplate"),
 # tools.item_name("Bandos tassets"),
@@ -161,14 +165,10 @@ def updates_announcements(price_matrix_items: pd.DataFrame) -> tuple[pd.Datetime
     updates_hours_since.index = price_matrix_items.index
     updates_days_since.index = price_matrix_items.index
 
-  #  announcements = get_announcements()['timestamp'].dt.tz_localize('US/Eastern').dt.date #UTC assumption !!!
-   # return update_dates, updates_hours_since, updates_days_since, announcements
+    announcements = get_announcements()['timestamp'].dt.tz_localize('US/Eastern').dt.date #UTC assumption !!!
+    return update_dates, updates_hours_since, updates_days_since, announcements
 #%%
-price_matrix_items, _ = item_data(price_data)
-#%%
-#price_corr = item_corr(price_matrix_items)
-#%%
-def cointegration_pairs(scrape: bool = False) -> pd.DataFrame|None:
+def cointegration_pairs(price_matrix_items: pd.DataFrame, scrape: bool = False) -> pd.DataFrame|None:
     df = pd.read_csv(cointegration_path)
     if not scrape:
         return df

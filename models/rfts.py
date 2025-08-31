@@ -17,7 +17,7 @@ def _train_rfts_model(
     train_x:            pd.Series,
     train_y:            pd.Series,
     time_splits:        int = 5,
-    outlier_threshold:  float = 2,
+    outlier_threshold:  float|None = 2,
     outlier_window:     int = 20,
     detection:          str = 'ewm',
     ewm_bounds:         list[float]|None = None,
@@ -52,23 +52,38 @@ def _train_rfts_model(
         elif detection=='iqr':
             y_train_outliers = outlier.iqr(y_train_cv, outlier_threshold)
             y_test_outliers = outlier.iqr(y_test_cv, outlier_threshold)
+        elif detection=='ewm2' and ewm_bounds is not None:
+            ewm_bounds_lower = ewm_bounds[0]
+            ewm_bounds_upper = ewm_bounds[1]
+            y_train_outliers = outlier.ewm_z_residuals2(y_train_cv, outlier_window,ewm_bounds_lower,ewm_bounds_upper, True)
+            y_test_outliers = outlier.ewm_z_residuals2(y_test_cv, outlier_window,ewm_bounds_lower,ewm_bounds_upper, True)
         elif detection=='ewm' and ewm_bounds is not None:
-            ewm_bounds_percentage_lower = ewm_bounds[0]
-            ewm_bounds_percentage_upper = ewm_bounds[1]
-            y_train_outliers = outlier.ewm(y_train_cv, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper)
-            y_test_outliers = outlier.ewm(y_test_cv, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper)
+            ewm_bounds_lower = ewm_bounds[0]
+            ewm_bounds_upper = ewm_bounds[1]
+            y_train_outliers = outlier.ewm_z_residuals(y_train_cv, outlier_window,ewm_bounds_lower,ewm_bounds_upper)
+            y_test_outliers = outlier.ewm_z_residuals(y_test_cv, outlier_window,ewm_bounds_lower,ewm_bounds_upper)
         elif detection is not None and not isinstance(detection, str):
             raise ValueError("Outlier parameter must be of string type")
+        elif detection is None:
+            pass
         else: raise ValueError("Selection error")
             
-        outliers_set.update(y_train_outliers.index)
-        outliers_set.update(y_test_outliers.index)
         
-        # Filter both X and y based on the outliers found in y
-        x_train_cv_filtered = x_train_cv[~np.isin(np.arange(len(y_train_cv)), y_train_outliers.index)]
-        y_train_cv_filtered = y_train_cv[~np.isin(np.arange(len(y_train_cv)), y_train_outliers.index)]
-        x_test_cv_filtered = x_test_cv[~np.isin(np.arange(len(y_test_cv)), y_test_outliers.index)]
-        y_test_cv_filtered = y_test_cv[~np.isin(np.arange(len(y_test_cv)), y_test_outliers.index)]
+        if detection:
+            outliers_set.update(y_train_outliers.index)
+            outliers_set.update(y_test_outliers.index)
+
+            # Filter both X and y based on the outliers found in y
+            x_train_cv_filtered = x_train_cv[~np.isin(np.arange(len(y_train_cv)), y_train_outliers.index)]
+            y_train_cv_filtered = y_train_cv[~np.isin(np.arange(len(y_train_cv)), y_train_outliers.index)]
+            x_test_cv_filtered = x_test_cv[~np.isin(np.arange(len(y_test_cv)), y_test_outliers.index)]
+            y_test_cv_filtered = y_test_cv[~np.isin(np.arange(len(y_test_cv)), y_test_outliers.index)]
+        else:
+            x_train_cv_filtered = x_train_cv
+            y_train_cv_filtered = y_train_cv
+            x_test_cv_filtered = x_test_cv
+            y_test_cv_filtered = y_test_cv
+
 
         model_cv = RandomForestRegressor(
             n_estimators=n_estimators, 
@@ -155,25 +170,35 @@ def RFTS(
     elif detection=='iqr':
         holdout_outliers_idx = outlier.iqr(holdout_y, outlier_threshold).index
         print(f'Holdout Outliers Detected: {len(holdout_outliers_idx)}\n--------------------------')
+    elif detection=='ewm2' and ewm_bounds is not None:
+        ewm_bounds_lower = ewm_bounds[0]
+        ewm_bounds_upper = ewm_bounds[1]
+        holdout_outliers_idx = outlier.ewm_z_residuals2(holdout_y, outlier_window,ewm_bounds_lower,ewm_bounds_upper, True).index
+        print(f'Holdout Outliers Detected: {len(holdout_outliers_idx)}\n--------------------------')
     elif detection=='ewm' and ewm_bounds is not None:
-        ewm_bounds_percentage_lower = 1-ewm_bounds[0]
-        ewm_bounds_percentage_upper = 1+ewm_bounds[1]
-        holdout_outliers_idx = outlier.ewm(holdout_y, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper).index
+        ewm_bounds_lower = ewm_bounds[0]
+        ewm_bounds_upper = ewm_bounds[1]
+        holdout_outliers_idx = outlier.ewm_z_residuals(holdout_y, outlier_window,ewm_bounds_lower,ewm_bounds_upper).index
         print(f'Holdout Outliers Detected: {len(holdout_outliers_idx)}\n--------------------------')
     elif detection is not None and not isinstance(detection, str):
         raise ValueError("Outlier parameter must be of string type")
+    elif detection is None:
+        pass
     else: raise ValueError("Selection error")
-    
-    holdout_outliers_idx = list(holdout_outliers_idx)
-    train_y_filtered = train_y.drop(train_outliers_idx)
-    train_x_filtered = train_x.drop(train_outliers_idx)
-    holdout_x_filtered = holdout_x.drop(holdout_outliers_idx)
-    holdout_y_filtered = holdout_y.drop(holdout_outliers_idx)
-    
+
+    if detection: 
+        holdout_outliers_idx = list(holdout_outliers_idx)
+        train_y_filtered = train_y.drop(train_outliers_idx)
+        train_x_filtered = train_x.drop(train_outliers_idx)
+        holdout_x_filtered = holdout_x.drop(holdout_outliers_idx)
+        holdout_y_filtered = holdout_y.drop(holdout_outliers_idx)
+    else:
+        train_y_filtered = train_y
+        train_x_filtered = train_x
+        holdout_x_filtered = holdout_x
+        holdout_y_filtered = holdout_y
     best_model.fit(train_x_filtered, train_y_filtered)
     holdout_preds = best_model.predict(holdout_x_filtered)
-
-
 
     final_holdout_mae, final_holdout_mase, final_holdout_da = tools.score_tree_model(train_y_filtered, holdout_y_filtered, holdout_preds)
     print(f"Cross-validated MASE: {np.mean(cv_mase):.4f} (±{np.std(cv_mase):.4f})")
@@ -188,7 +213,7 @@ def RFTS(
     print(f"Final Holdout Directional Accuracy: {final_holdout_da:.2f}%")
     if detection is not None and isinstance(detection,str):
         return best_model, holdout_preds, train_outliers_idx, holdout_outliers_idx, cv_mae, cv_mase, train_cv_mae, train_cv_mase
-    else: return best_model, holdout_preds, cv_mae, cv_mase, train_cv_mae, train_cv_mase
+    else: return best_model, holdout_preds, None, None, cv_mae, cv_mase, train_cv_mae, train_cv_mase
         
 def RFTSOptim(data:pd.DataFrame,target_col:str, holdout:int,n_trials:int=30,pruner:bool=True,meta_weight=False)-> tuple:
     X = data.drop(target_col, axis=1).iloc[:-holdout].to_numpy(dtype="float32")

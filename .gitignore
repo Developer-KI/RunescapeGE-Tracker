@@ -12,3 +12,8 @@ data/processed_bosstables.csv
 data/processed_data.csv
 data/processed_old.csv
 data/cointegration_price_matrix.csv
+options/options_tree.exe
+options/options_tree.ilk
+options/options_tree.obj
+options/options_tree.pdb
+options/vc140.pdb

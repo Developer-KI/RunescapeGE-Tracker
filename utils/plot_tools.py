@@ -99,6 +99,50 @@ def plot_features(
 
     return fig, ax
 
+def plot_price(
+    item:  int|str,
+    price_data: pd.DataFrame|pd.Series,
+    start:  str | None = None,
+    end:    str | None = None,
+    marker: bool = False,
+    show:   bool = False #currently useless for interactive mode/Jupyter type environments
+) -> tuple[plt.Figure, plt.Axes]: # Explicitly return the plot objects
+    
+    fig, ax = plt.subplots(figsize=(10, 5))
+    if isinstance(item, str):
+        item = tools.item_name(item)
+
+    if isinstance(price_data.columns, pd.MultiIndex):
+        high_price = price_data[('avgLowPrice', item)]
+        low_price = price_data[('avgHighPrice', item)]
+        y_slice_high = tools.ensure_datetime_index(high_price).loc[start:end]
+        y_slice_low = tools.ensure_datetime_index(low_price).loc[start:end]
+        daytime_shade(y_slice_high)
+        if marker:
+            ax.plot(y_slice_high, label='High Price', marker='.', markerfacecolor='yellow')
+            ax.plot(y_slice_low, label="Low Price", marker='.', markerfacecolor='yellow')
+        else:
+            ax.plot(y_slice_high, label='High Price')
+            ax.plot(y_slice_low, label="Low Price")
+        plt.legend()
+
+    else:
+        wprice = price_data[item]  
+        y_slice = tools.ensure_datetime_index(wprice).loc[start:end]
+        daytime_shade(y_slice)
+        ax.plot(y_slice, marker='.', markerfacecolor='yellow')
+
+    ax.set_title(fr'{tools.item_name(item)} ({item})')
+    ax.set_ylabel("GP")
+    ax.grid()
+    plt.xticks(rotation=45)
+
+    if show:
+        plt.show()
+
+    return fig, ax
+
+
 def plot_item_market_divergence(
     data:           pd.DataFrame,
     item:           int,
@@ -254,10 +298,6 @@ def plot_residuals(data: pd.DataFrame, model, lookback: int = 0) -> np.ndarray:
     plt.plot(adj_index, residuals, marker="o", markersize=2, linestyle="-", label="Residuals", color='green')
     plt.axhline(y=0, color="black", linestyle="--", alpha=0.7)  # Reference line
     ax=plt.gca()
-    ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-    ax.ticklabel_format(style='plain', axis='y', useOffset=False)
-    ax.xaxis.set_major_locator(MaxNLocator(nbins=25)) 
-    ax.ticklabel_format(useOffset=False)
     plt.xlabel("Time")
     plt.ylabel("Error (Residuals)")
     plt.title("Residual Errors Over Time")

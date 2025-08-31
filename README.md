@@ -43,3 +43,6 @@ https://www.robjhyndman.com/papers/mase.pdf
 *Bootstrapping can help ease sketchy normality assumptions, enables t-tests
 *-Covariance matrix estimators/regularization
 -Weighing cross-validation split means to emphasize time series splits more recent rather than a flat mean of all MSE/RMSE/etc's over splits
+
+CITE:
+https://github.com/hannes101/LeeStrazicichUnitRoot
