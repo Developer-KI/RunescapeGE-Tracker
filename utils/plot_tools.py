@@ -40,17 +40,19 @@ plt.rcParams.update({
 _DEFAULT_TITLE = object()
 
 def daytime_shade(
-        feature_for_index:  pd.Series, 
+        feature_for_index:  pd.Series|pd.DataFrame|pd.DatetimeIndex, 
         time_start:         str = '11:00:00', 
         time_end:           str = '20:00:00', 
         plot_type:          plt.Axes|None = None
 ) -> None:
-    
-    dates = feature_for_index.index.date
-    unique_dates = pd.to_datetime(pd.Series(dates).unique())
+    if isinstance(feature_for_index, pd.Series) or isinstance(feature_for_index, pd.DataFrame):
+        dates = feature_for_index.index.date
+        unique_dates = pd.to_datetime(pd.Series(dates).unique())
+    elif isinstance(feature_for_index, pd.DatetimeIndex):
+        unique_dates = feature_for_index.unique()
+    else: raise ValueError("Shaded feature must be datetimeIndex or Series and DataFrame containing one.")
     
     for date in unique_dates:
-        # Define the day period for first day (e.g., 11 AM to 8 PM)
         day_start = pd.Timestamp(f"{date} {time_start}")
         day_end = pd.Timestamp(f"{date} {time_end}")
         if plot_type is not None:
@@ -237,7 +239,7 @@ def plot_recent_alch_vs_price(item_id: int) -> None:
         plt.xlabel("Time")
         plt.ylabel("Price")
         plt.title("Recent Alchemy vs Realized Price")
-        plt.xticks(rotation=45)  # Rotate timestamps for clarity
+        plt.xticks(rotation=45)  
         plt.legend()
         plt.grid()
 
@@ -310,7 +312,7 @@ def plot_residuals(data: pd.DataFrame, model, lookback: int = 0) -> np.ndarray:
 #TODO make sure statistics arent calculated on outliers
 # removed shapiro test
 
-def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookback: int = 0, fill_outliers=None, std_factor: float = 1.96):
+def plot_pred_vs_price(data: pd.DataFrame, predictions: np.ndarray, holdout_pred_n:int, lookback: int = 0, fill_outliers=None, std_factor: float = 1.96):
     if fill_outliers is not None:
         Y = data[data.columns[0]].copy()
         Y.loc[fill_outliers] = np.nan
@@ -326,124 +328,88 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
         print(f"Warning: 'lookback' ({lookback}) is greater than dataset size ({data.shape[0]}). Adjusting lookback to max size for plotting consistency.")
         lookback = data.shape[0]
         adj_index = time_index
-    # if lookback < len(holdout_pred):
-    #     print(f"Warning: 'lookback' ({lookback}) is less than 'holdout' ({len(holdout_pred)}). Adjusting lookback to holdout value for plotting consistency.")
-    #     lookback = len(holdout_pred)
-    #     adj_index = time_index[-lookback:]
-        
-    # Determine the slice points for training/test and holdout periods
-    training_test_plot_end_idx = lookback - len(holdout_pred) 
+    training_test_plot_end_idx = lookback - holdout_pred_n
     
     training_test_time_indices = adj_index[:training_test_plot_end_idx]
     holdout_time_indices = adj_index[training_test_plot_end_idx:]
+    holdout_predictions = predictions[:-holdout_pred_n]
 
-    # Confidence Interval Calculation
-    pred_std = np.std(holdout_pred)  
-    upper_bound = holdout_pred + std_factor * pred_std
-    lower_bound = holdout_pred - std_factor * pred_std
+    pred_std = np.std(holdout_predictions)  
+    upper_bound = holdout_predictions + std_factor * pred_std
+    lower_bound = holdout_predictions - std_factor * pred_std
     
     fig = plt.figure(figsize=(12, 10), constrained_layout=True) 
 
-    if not isinstance(model, SimpleExpSmoothing):
-        X = data.drop(data.columns[0], axis=1)
+    X = data.drop(data.columns[0], axis=1)
 
-        # Model predictions 
-        #Keep in mind that this generates predictions for all folds from a final trained model
-        #which is inherently leaking data *between* folds, as opposed to generating predictions from within each fold.
-        #The leaking approach is good to examine the training fit given the maximum data, but cannot
-        #help decide hyperparameters or compare performance between folds
-        Y_pred_full_lookback = model.predict(X.iloc[-lookback:]) 
+    # Model predictions 
+    #Keep in mind that this generates predictions for all folds from a final trained model
+    #which is inherently leaking data *between* folds, as opposed to generating predictions from within each fold.
+    #The leaking approach is good to examine the training fit given the maximum data, but cannot
+    #help decide hyperparameters or compare performance between folds
+    Y_pred_full_lookback = predictions[-lookback:]
 
-        # Residual Calculation
-        residuals_full_lookback = Y[-lookback:] - Y_pred_full_lookback #not sure if leaking
-        residuals_full_percent= (residuals_full_lookback/Y[-lookback:])*100
-        
-        # Separate residuals into training/test and holdout for different colors
-        residuals_training_test = residuals_full_lookback[:training_test_plot_end_idx]
-        residuals_holdout_for_plot = residuals_full_lookback[training_test_plot_end_idx:]
-        residuals_training_test_percent = residuals_full_percent[:training_test_plot_end_idx]
-        residuals_holdout_for_plot_percent = residuals_full_percent[training_test_plot_end_idx:]
-        
-        # Use GridSpec with height_ratios
-        gs = GridSpec(3, 1, figure=fig, height_ratios=[4, 2, 1], hspace=0.05) 
-
-        # **Row 1: Main Subplot - Predictions vs. Actual**
-        ax_main = fig.add_subplot(gs[0, 0]) 
-        ax_main.plot(adj_index, Y[-lookback:], marker="o", markersize=2, linestyle="-", label="Actual", color='white')
-        ax_main.plot(holdout_time_indices[-lookback:], holdout_pred[-lookback:], marker="o", markersize=2, linestyle="-", label="Predicted", color="red")
-        ax_main.fill_between(holdout_time_indices[-lookback:], lower_bound[-lookback:], upper_bound[-lookback:], color="#5DD4FF39", alpha=0.3,
-                                label=f"{(stats.norm.cdf(std_factor) - stats.norm.cdf(-std_factor)) * 100:.2f}% Confidence Interval (Gaussian)")
-        # Only plot outliers that are within the current plotting window
-        if fill_outliers:
-            outlier_timestamps_arr = np.array(fill_outliers)
-
-            visible_outlier_timestamps = np.intersect1d(adj_index, outlier_timestamps_arr)
-            
-            outlier_data = data.loc[visible_outlier_timestamps, data.columns[0]]
-            
-            ax_main.plot(
-                outlier_data.index,
-                outlier_data,
-                'X', color='yellow', markersize=8, markeredgecolor='black', label='Detected Outliers'
-            )
-        # **Row 2: Residuals Subplot (Full Width, with color change)**
-        ax_residuals = fig.add_subplot(gs[1, 0], sharex=ax_main) 
-        ax_residuals.plot(training_test_time_indices, residuals_training_test_percent, 
-                        marker="o", markersize=2, linestyle="-", label="Residuals (Train/Test)", color='grey')
-        ax_residuals.plot(holdout_time_indices, residuals_holdout_for_plot_percent, 
-                        marker="o", markersize=2, linestyle="-", label="Residuals (Holdout)", color="skyblue")
-        
-        # **Row 3: Histogram of Residuals (Separate Plot)**
-        ax_hist = fig.add_subplot(gs[2, 0]) 
-        hist_min= np.nanpercentile(residuals_holdout_for_plot,0.5) 
-        hist_max= np.nanpercentile(residuals_holdout_for_plot,99.5)
-        ax_hist.hist(residuals_holdout_for_plot, bins=30, color='skyblue', edgecolor='black', alpha=0.7, range=(hist_min,hist_max), density=True)
-        ax_hist.axvline(0, color='white', linestyle='--', linewidth=1)
-
-        mu_norm, std_norm = norm.fit(residuals_holdout_for_plot)
-        x_plot = np.linspace(hist_min, hist_max, 500)
-        pdf_norm = norm.pdf(x_plot, mu_norm, std_norm)
-        ax_hist.plot(x_plot, pdf_norm, 'r-', linewidth=1, label=r'Normal ($H_0$)')
-        ax_hist.axvline(mu_norm, color='red', linestyle='-', linewidth=1)
-
-        jb_stat, jb_p_value= jarque_bera(residuals_holdout_for_plot)
-        
-        textstr = '\n'.join((
-            r'$\mu$: %.4f' % (mu_norm,),
-            r'$\sigma$: %.4f' % (std_norm,),
-            r'Skewness: %.3f' % (skew(residuals_holdout_for_plot),),
-            r'Kurtosis: %.3f' % (kurtosis(residuals_holdout_for_plot),),
-            r'Jaque-Bera: %.3f (p=%.3f)' % (jb_stat,jb_p_value),
-        ))
-        props = dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.6)
-        ax_hist.text(0.02, 0.98, textstr, transform=ax_hist.transAxes, fontsize=10,
-                verticalalignment='top', horizontalalignment='left', bbox=props)
-
-    else: 
-        # Residual Calculation
-        residuals = Y[-len(holdout_pred):] - holdout_pred #not sure if leaking
-        residuals_percent= (residuals/Y[-len(holdout_pred):])*100
-        
-        # Use GridSpec with height_ratios
-        gs = GridSpec(2, 2, figure=fig, height_ratios=[4, 2], width_ratios=[1,3], hspace=0.05) 
-
-        # **Row 1: Main Subplot - Predictions vs. Actual**
-        ax_main = fig.add_subplot(gs[0, :]) 
-        ax_main.plot(adj_index, Y[-lookback:], marker="o", markersize=2, linestyle="-", label="Actual", color='white')
-        ax_main.plot(holdout_time_indices, holdout_pred, marker="o", markersize=2, linestyle="-", label="Predicted", color="red")
-        ax_main.fill_between(holdout_time_indices, lower_bound, upper_bound, color="#5DD4FF39", alpha=0.3,
-                                label=f"{(stats.norm.cdf(std_factor) - stats.norm.cdf(-std_factor)) * 100:.2f}% Confidence Interval (Gaussian)")
-
-        # **Row 2: Residuals Subplot (Full Width, with color change)**
-        ax_residuals = fig.add_subplot(gs[1, 1]) 
-        ax_residuals.plot(holdout_time_indices, residuals_percent, 
-                        marker="o", markersize=2, linestyle="-", label="Residuals (Holdout)", color="skyblue")
-        ax_residuals.set_xlim(holdout_time_indices[0], holdout_time_indices[-1])
+    residuals_full_lookback = Y[-lookback:] - Y_pred_full_lookback #not sure if leaking
+    residuals_full_percent= (residuals_full_lookback/Y[-lookback:])*100
     
-        # **Row 3: Histogram of Residuals (Separate Plot)**
-        ax_hist = fig.add_subplot(gs[1, 0]) 
-        ax_hist.hist(residuals, bins=30, color='skyblue', edgecolor='black', alpha=0.7)
+    residuals_training_test = residuals_full_lookback[:training_test_plot_end_idx]
+    residuals_holdout_for_plot = residuals_full_lookback[training_test_plot_end_idx:]
+    residuals_training_test_percent = residuals_full_percent[:training_test_plot_end_idx]
+    residuals_holdout_for_plot_percent = residuals_full_percent[training_test_plot_end_idx:]
+    
+    gs = GridSpec(3, 1, figure=fig, height_ratios=[4, 2, 1], hspace=0.05) 
 
+    #Main Subplot
+    ax_main = fig.add_subplot(gs[0, 0]) 
+    ax_main.plot(adj_index, Y[-lookback:], marker="o", markersize=2, linestyle="-", label="Actual", color='white')
+    ax_main.plot(holdout_time_indices[-lookback:], holdout_predictions[-lookback:], marker="o", markersize=2, linestyle="-", label="Predicted", color="red")
+    ax_main.fill_between(holdout_time_indices[-lookback:], lower_bound[-lookback:], upper_bound[-lookback:], color="#5DD4FF39", alpha=0.3,
+                            label=f"{(stats.norm.cdf(std_factor) - stats.norm.cdf(-std_factor)) * 100:.2f}% Confidence Interval (Gaussian)")
+    if fill_outliers:
+        outlier_timestamps_arr = np.array(fill_outliers)
+
+        visible_outlier_timestamps = np.intersect1d(adj_index, outlier_timestamps_arr)
+        
+        outlier_data = data.loc[visible_outlier_timestamps, data.columns[0]]
+        
+        ax_main.plot(
+            outlier_data.index,
+            outlier_data,
+            'X', color='yellow', markersize=8, markeredgecolor='black', label='Detected Outliers'
+        )
+    #Residuals Subplot
+    ax_residuals = fig.add_subplot(gs[1, 0], sharex=ax_main) 
+    ax_residuals.plot(training_test_time_indices, residuals_training_test_percent, 
+                    marker="o", markersize=2, linestyle="-", label="Residuals (Train/Test)", color='grey')
+    ax_residuals.plot(holdout_time_indices, residuals_holdout_for_plot_percent, 
+                    marker="o", markersize=2, linestyle="-", label="Residuals (Holdout)", color="skyblue")
+    
+    #Histogram
+    ax_hist = fig.add_subplot(gs[2, 0]) 
+    hist_min= np.nanpercentile(residuals_holdout_for_plot,0.5) 
+    hist_max= np.nanpercentile(residuals_holdout_for_plot,99.5)
+    ax_hist.hist(residuals_holdout_for_plot, bins=30, color='skyblue', edgecolor='black', alpha=0.7, range=(hist_min,hist_max), density=True)
+    ax_hist.axvline(0, color='white', linestyle='--', linewidth=1)
+
+    mu_norm, std_norm = norm.fit(residuals_holdout_for_plot)
+    x_plot = np.linspace(hist_min, hist_max, 500)
+    pdf_norm = norm.pdf(x_plot, mu_norm, std_norm)
+    ax_hist.plot(x_plot, pdf_norm, 'r-', linewidth=1, label=r'Normal ($H_0$)')
+    ax_hist.axvline(mu_norm, color='red', linestyle='-', linewidth=1)
+
+    jb_stat, jb_p_value= jarque_bera(residuals_holdout_for_plot)
+    
+    textstr = '\n'.join((
+        r'$\mu$: %.4f' % (mu_norm,),
+        r'$\sigma$: %.4f' % (std_norm,),
+        r'Skewness: %.3f' % (skew(residuals_holdout_for_plot),),
+        r'Kurtosis: %.3f' % (kurtosis(residuals_holdout_for_plot),),
+        r'Jaque-Bera: %.3f (p=%.3f)' % (jb_stat,jb_p_value),
+    ))
+    props = dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.6)
+    ax_hist.text(0.02, 0.98, textstr, transform=ax_hist.transAxes, fontsize=10,
+            verticalalignment='top', horizontalalignment='left', bbox=props)
+    
     #Main Plot
     daytime_shade(data.iloc[-lookback:], plot_type=ax_main)
     ax_main.set_ylabel("GP Price")
@@ -460,14 +426,11 @@ def plot_pred_vs_price(data: pd.DataFrame, model, holdout_pred:np.ndarray, lookb
     ax_residuals.legend()
     ax_residuals.grid()
 
-    #General Formatting
     plt.setp(ax_main.get_xticklabels(), visible=False) 
     
-    # Directly set rotation for the x-tick labels on the residuals subplot
-    # This is the bottom-most plot with visible x-axis labels.
     for label in ax_residuals.get_xticklabels():
         label.set_rotation(45)
-        label.set_horizontalalignment('right') # Adjust horizontal alignment after rotation
+        label.set_horizontalalignment('right') 
 
     plt.show()
 
@@ -487,16 +450,12 @@ def test_train_error(data, param:str, exclude_param:dict, model_class, param_ran
         model = model_class(**model_params)
         model.fit(X_train, y_train)
 
-        # Predict on train/test sets
         train_preds = model.predict(X_train)
         test_preds = model.predict(X_test)
 
-        # Store errors (Mean Absolute Error or RMSE)
         train_errors.append(loss(y_train, train_preds))
         test_errors.append(loss(y_test, test_preds))
 
-
-    # Plot results
     plt.figure(figsize=(10, 6))
     plt.plot(values, train_errors, label="Train Error", marker='o')
     plt.plot(values, test_errors, label="Test Error", marker='o')

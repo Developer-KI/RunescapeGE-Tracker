@@ -219,15 +219,18 @@ def calculate_returns(price_series: pd.Series|pd.DataFrame, return_periods: str|
     """
     Calculates returns for a given price series, handling both base returns and resampling.
     """
-    base_returns = price_series/price_series.shift(1).dropna()
+    #induces an aggregation distortion
+
+    ratio = price_series/price_series.shift(1).dropna()
+    raw_return = ratio -1
 
     if return_periods is None or return_periods.lower() == '5m':
-        return base_returns
+        return raw_return
     
     elif isinstance(return_periods, str):
         try:
-            compound_returns = (base_returns).resample(return_periods).prod()
-            return compound_returns
+            compound_returns = (ratio).resample(return_periods).prod()
+            return compound_returns - 1
         except Exception as e:
             raise ValueError(f"Invalid resample rule '{return_periods}'. Error: {e}")
     else:
@@ -269,6 +272,7 @@ def create_item_index(data: pd.DataFrame|list, items:list[int], type:str, base_v
     Args:
         data (pd.DataFrame|str): Ensure passing in a list of price and volume DataFrames is ordered [price,volume].
         items (list): A comma separated list of item IDs.
+        type (string): Equal-weighted or volume-weighted indexing
         base_value (int, default 100): Index starting value.
     """
     base_value = 100

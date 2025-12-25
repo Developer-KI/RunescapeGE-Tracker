@@ -48,15 +48,13 @@ def ewm_z_residuals(
     ewm_mean = full_y.ewm(span=smoothing).mean()
     residuals = full_y - ewm_mean
     ewm_std_residuals = residuals.ewm(span=smoothing).std() #outlier inflation
-    # A small constant is added to the denominator to prevent division by zero.
+
     zscores = residuals / (ewm_std_residuals + 1e-9)
     outlier_mask = pd.Series(False, index=full_y.index)
 
-    # Check for upper outliers
     upper_outliers = zscores > upper_bound
     outlier_mask = outlier_mask | upper_outliers
 
-    # Check for lower outliers
     lower_outliers = zscores < -lower_bound
     outlier_mask = outlier_mask | lower_outliers
     
@@ -81,8 +79,7 @@ def ewm_z_residuals2(
     smoothing: int,
     lower_bound: float | None = 3,
     upper_bound: float | None = 3,
-    iterative: bool = False,
-    g: int = 0
+    repetitions: int | None = 20
 ) -> pd.Series:
     """
     Detects outliers based on a Z-score calculated on EWMA residuals.
@@ -98,49 +95,37 @@ def ewm_z_residuals2(
     Returns:
     - pd.Series: The data points identified as outliers.
     """
-    # Base case: Stop recursion after 20 passes or if no outliers were found
-    if iterative and (g >= 20 or not full_y.any()):
-        return pd.Series(dtype=full_y.dtype)
+    all_outliers = []
+    current_y = full_y.copy()
 
-    ewm_mean = full_y.ewm(span=smoothing).mean()
-    residuals = full_y - ewm_mean
-    ewm_std_residuals = residuals.ewm(span=smoothing).std()
-    std_safe = ewm_std_residuals.replace(0, np.nan)
-    zscores = residuals / std_safe
-    
-    upper_outliers = zscores > upper_bound
-    lower_outliers = zscores < -lower_bound
-    outlier_mask = upper_outliers | lower_outliers
-    
-    # Check if any new outliers were found
-    if iterative and outlier_mask.any():
-        print(f"Additional Passes: {g + 1}")
-        print(f"Found {outlier_mask.sum()} new outliers.")
+    for i in range(repetitions):
+        if current_y.empty:
+            break
+            
+        ewm_mean = current_y.ewm(span=smoothing).mean()
+        residuals = current_y - ewm_mean
+        ewm_std_residuals = residuals.ewm(span=smoothing).std()
         
-        # Get the outliers from the current pass
-        current_outliers = full_y[outlier_mask]
+        # Replace 0 std_dev to avoid division by zero
+        std_safe = ewm_std_residuals.replace(0, np.nan)
+        zscores = residuals / std_safe
         
-        # Get the remaining "clean" data for the next pass
-        non_outlier_data = full_y[~outlier_mask]
+        upper_outliers = zscores > upper_bound
+        lower_outliers = zscores < -lower_bound
+        outlier_mask = upper_outliers | lower_outliers
         
-        # Recurse on the non-outlier data and combine the results
-        subsequent_outliers = ewm_z_residuals2(
-            non_outlier_data, 
-            smoothing, 
-            lower_bound, 
-            upper_bound, 
-            iterative=True, 
-            g=g + 1
-        )
+        current_pass_outliers = current_y[outlier_mask]
         
-        return pd.concat([current_outliers, subsequent_outliers])
-    
-    return full_y[outlier_mask]
+        print(f"Pass {i+1} | Found {len(current_pass_outliers)} outliers.")
+        
+        all_outliers.append(current_pass_outliers)
+        
+        current_y = current_y[~outlier_mask]
 
-
+    final_outliers = pd.concat([df for df in all_outliers if not df.empty]).squeeze()
     
+    return final_outliers
 
-#TODO implement into RFTS/XGB
 def rolling_volume(full_y: pd.Series, volume: pd.Series, window: int, threshold: float):
 
     log_return = np.log(full_y / full_y.shift(1))

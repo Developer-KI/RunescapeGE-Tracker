@@ -67,7 +67,6 @@ def _train_rfts_model(
         elif detection is None:
             pass
         else: raise ValueError("Selection error")
-            
         
         if detection:
             outliers_set.update(y_train_outliers.index)

@@ -294,7 +294,7 @@ def data_preprocess_deprecated(read: bool, filepath: str = "./data", read_path: 
     
     return processed_priced_data
 
-def alchemy_preprocess(read: bool, filepath: str = data_path, read_path: str = f'{data_path}/alchemy_data.csv', write: bool = False) -> pd.DataFrame:
+def alchemy_preprocess(read: bool = True, filepath: str = data_path, read_path: str = f'{data_path}/alchemy_data.csv', write: bool = False) -> pd.DataFrame:
     ### Read has higher priority than write
     if read:
         df = pd.read_csv(f'{read_path}', names=['item', 'price'], index_col=0)

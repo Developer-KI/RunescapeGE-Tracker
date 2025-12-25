@@ -121,12 +121,15 @@ def market_item_corr(market_index: pd.Series, price_matrix_items) -> pd.Series:
 def cyclical_time(price_matrix_items:pd.DataFrame) -> tuple:
     if not isinstance(price_matrix_items.index, pd.DatetimeIndex):
         price_matrix_items.index = pd.to_datetime(price_matrix_items.index, unit='s', utc=True).tz_convert(pytz.timezone('US/Eastern'))  
+
     hour_time_sin = np.sin(price_matrix_items.index.minute*2*np.pi/60)
     hour_time_cos = np.cos(price_matrix_items.index.minute*2*np.pi/60)
     day_time_sin = np.sin(price_matrix_items.index.hour*2*np.pi/24)
     day_time_cos = np.cos(price_matrix_items.index.hour*2*np.pi/24)
-    hour_trig = np.vstack((hour_time_sin, hour_time_cos)).T
-    day_trig = np.vstack((day_time_sin, day_time_cos)).T
+    
+    hour_trig = pd.DataFrame({'minute_sin': hour_time_sin, 'minute_cos': hour_time_cos}, index=price_matrix_items.index)
+    day_trig = pd.DataFrame({'day_sin': day_time_sin, 'day_cos': day_time_cos}, index=price_matrix_items.index)
+
     return hour_time_sin, hour_time_cos, day_time_sin, day_time_cos, hour_trig, day_trig
 
 def updates_announcements(price_matrix_items: pd.DataFrame) -> tuple[pd.DatetimeIndex, pd.Series, pd.Series, pd.Series]:
@@ -207,4 +210,3 @@ def cointegration_pairs(price_matrix_items: pd.DataFrame, scrape: bool = False) 
                     writer.writerow([item1, item2, "ERROR"])
 
         print("\nScript finished. All cointegration tests are now complete.")
-    # %%

@@ -88,52 +88,7 @@ double option(std::string option_family, std::string option_type, double S_0, do
         }
     return node_values[0];
     }
-    else if (n_branches == 3) {
-        double dt {T / n_steps};
-        double up {exp(sigma * sqrt(2*dt))};
-        double down {1 / up};
-        double p_up {pow((exp(((r-q) * dt)/2) - exp(-sigma * sqrt(dt/2))) / (exp(sigma * sqrt(dt/2)) - exp(-sigma * sqrt(dt/2))), 2)};
-        double p_down {pow((exp(sigma*sqrt(dt/2)) - exp(((r-q)*dt)/2)) / (exp(sigma * sqrt(dt/2)) - exp(-sigma * sqrt(dt/2))), 2)};
-        double p_middle {1-p_up-p_down};
-       
-        std::function<double(double)> payoff_func; // relieves local scope issues with lambda function declaration
-
-        if (option_type == "call") {
-            payoff_func = [K](double S_n) { return std::max(S_n - K, 0.0); };
-        } else {
-            payoff_func = [K](double S_n) { return std::max(K - S_n, 0.0); };
-        }        
-
-        // final time step loop
-        std::vector<double> node_values(2 * n_steps + 1);
-        for(int j=0; j<2*n_steps+1; ++j) {
-            double log_S_n {std::log(S_0) + static_cast<double>(n_steps - j) * std::log(up) + j * std::log(down)};
-            double S_n {exp(log_S_n)};
-            node_values[j] = std::max(payoff_func(S_n), static_cast<double>(0));
-        }
-        // rest...
-        if (option_family=="European") {
-            for(int i=n_steps-1; i >= 0; --i) {
-                for (int j=0; j <= 2*i; ++j) {
-                    node_values[j] = exp(-r * dt) * (p_up * node_values[j] + p_down * node_values[j+1] + p_middle * node_values[j+2]);
-                }  
-            }
-        }
-        else if (option_family=="American") { // variable initialization within loop incurs no overhead due to compiler optimizations
-            for(int i=n_steps-1; i >= 0; --i) {
-                for (int j=0; j <= 2*i; ++j) {
-                    double european_value = exp(-r * dt) * (p_up * node_values[j] + p_middle * node_values[j + 1] + p_down * node_values[j+2]);
-                    double log_S_j {std::log(S_0) + static_cast<double>(i - 2 * j) * std::log(up)};
-                    double S_j = exp(log_S_j);
-                    double intrinsic_value = payoff_func(S_j);
-                    node_values[j] = std::max(european_value, intrinsic_value);
-                }
-            }
-        }
-    return node_values[0]; 
-
-
-        } else {
+    else {
         return 0.0;
     }
 }
@@ -192,7 +147,7 @@ bool option_menu(std::string option_family, std::string option_type, option_para
         if (sigma_raw=="b")         return false;
         std::string n_steps_raw     {get_input("Tree Layers: ")};
         if (n_steps_raw=="b")       return false;
-        std::string n_branches_raw  {get_input("Node Branches (binomial and trinomial tree are only supported currently): ")};
+        std::string n_branches_raw  {get_input("Node Branches (binomial is only supported currently): ")};
         if (n_branches_raw=="b")    return false;
         clear_screen();
         

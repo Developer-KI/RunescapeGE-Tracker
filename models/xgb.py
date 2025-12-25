@@ -12,7 +12,7 @@ import utils.outlier_detection as outlier
 #from statsmodels.tsa.stattools import adfuller
 
 simplefilter("error")
-#%%
+
 def _train_xgb_model(
     train_x:            pd.Series,
     train_y:            pd.Series,
@@ -28,7 +28,7 @@ def _train_xgb_model(
     min_child_weight:   int=5,
     n_estimators:       int = 100,
     max_depth:          int = 10,
-) -> tuple: #implement recursive predictions
+) -> tuple: 
     
     tscv = TimeSeriesSplit(n_splits=time_splits)
     
@@ -53,17 +53,26 @@ def _train_xgb_model(
         elif detection=='iqr':
             y_train_outliers = outlier.iqr(y_train_cv, outlier_threshold)
             y_test_outliers = outlier.iqr(y_test_cv, outlier_threshold)
+        elif detection=='ewm2' and ewm_bounds is not None:
+            ewm_bounds_lower = ewm_bounds[0]
+            ewm_bounds_upper = ewm_bounds[1]
+            y_train_outliers = outlier.ewm_z_residuals2(y_train_cv, outlier_window,ewm_bounds_lower,ewm_bounds_upper, True)
+            y_test_outliers = outlier.ewm_z_residuals2(y_test_cv, outlier_window,ewm_bounds_lower,ewm_bounds_upper, True)
         elif detection=='ewm' and ewm_bounds is not None:
-            ewm_bounds_percentage_lower = ewm_bounds[0]
-            ewm_bounds_percentage_upper = ewm_bounds[1]
-            y_train_outliers = outlier.ewm(y_train_cv, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper)
-            y_test_outliers = outlier.ewm(y_test_cv, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper)
+            ewm_bounds_lower = ewm_bounds[0]
+            ewm_bounds_upper = ewm_bounds[1]
+            y_train_outliers = outlier.ewm_z_residuals(y_train_cv, outlier_window,ewm_bounds_lower,ewm_bounds_upper)
+            y_test_outliers = outlier.ewm_z_residuals(y_test_cv, outlier_window,ewm_bounds_lower,ewm_bounds_upper)
         elif detection is not None and not isinstance(detection, str):
             raise ValueError("Outlier parameter must be of string type")
+        elif detection is None:
+            pass
         else: raise ValueError("Selection error")
-            
-        outliers_set.update(y_train_outliers.index)
-        outliers_set.update(y_test_outliers.index)
+        
+        if detection:
+            outliers_set.update(y_train_outliers.index)
+            outliers_set.update(y_test_outliers.index)
+
         
         # Filter both X and y based on the outliers found in y
         x_train_cv_filtered = x_train_cv[~np.isin(np.arange(len(y_train_cv)), y_train_outliers.index)]
@@ -153,32 +162,41 @@ def XGB(
         max_depth          
         )
 
-
     if detection=='rolling-z':
         holdout_outliers_idx = outlier.rolling_zscore(holdout_y, outlier_window, outlier_threshold).index
         print(f'Holdout Outliers Detected: {len(holdout_outliers_idx)}\n--------------------------')
     elif detection=='iqr':
         holdout_outliers_idx = outlier.iqr(holdout_y, outlier_threshold).index
         print(f'Holdout Outliers Detected: {len(holdout_outliers_idx)}\n--------------------------')
+    elif detection=='ewm2' and ewm_bounds is not None:
+        ewm_bounds_lower = ewm_bounds[0]
+        ewm_bounds_upper = ewm_bounds[1]
+        holdout_outliers_idx = outlier.ewm_z_residuals2(holdout_y, outlier_window,ewm_bounds_lower,ewm_bounds_upper, True).index
+        print(f'Holdout Outliers Detected: {len(holdout_outliers_idx)}\n--------------------------')
     elif detection=='ewm' and ewm_bounds is not None:
-        ewm_bounds_percentage_lower = 1-ewm_bounds[0]
-        ewm_bounds_percentage_upper = 1+ewm_bounds[1]
-        holdout_outliers_idx = outlier.ewm(holdout_y, outlier_window,ewm_bounds_percentage_lower,ewm_bounds_percentage_upper).index
+        ewm_bounds_lower = ewm_bounds[0]
+        ewm_bounds_upper = ewm_bounds[1]
+        holdout_outliers_idx = outlier.ewm_z_residuals(holdout_y, outlier_window,ewm_bounds_lower,ewm_bounds_upper).index
         print(f'Holdout Outliers Detected: {len(holdout_outliers_idx)}\n--------------------------')
     elif detection is not None and not isinstance(detection, str):
         raise ValueError("Outlier parameter must be of string type")
+    elif detection is None:
+        pass
     else: raise ValueError("Selection error")
     
-    holdout_outliers_idx = list(holdout_outliers_idx)
-    train_y_filtered = train_y.drop(train_outliers_idx)
-    train_x_filtered = train_x.drop(train_outliers_idx)
-    holdout_x_filtered = holdout_x.drop(holdout_outliers_idx)
-    holdout_y_filtered = holdout_y.drop(holdout_outliers_idx)
-    
+    if detection: 
+        holdout_outliers_idx = list(holdout_outliers_idx)
+        train_y_filtered = train_y.drop(train_outliers_idx)
+        train_x_filtered = train_x.drop(train_outliers_idx)
+        holdout_x_filtered = holdout_x.drop(holdout_outliers_idx)
+        holdout_y_filtered = holdout_y.drop(holdout_outliers_idx)
+    else:
+        train_y_filtered = train_y
+        train_x_filtered = train_x
+        holdout_x_filtered = holdout_x
+        holdout_y_filtered = holdout_y
     best_model.fit(train_x_filtered, train_y_filtered)
     holdout_preds = best_model.predict(holdout_x_filtered)
-
-
 
     final_holdout_mae, final_holdout_mase, final_holdout_da = tools.score_tree_model(train_y_filtered, holdout_y_filtered, holdout_preds)
     print(f"Cross-validated MASE: {np.mean(cv_mase):.4f} (±{np.std(cv_mase):.4f})")
