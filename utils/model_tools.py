@@ -43,10 +43,8 @@ plt.rcParams.update({
 with open(json_path, 'r') as file:
     name_to_id: Dict[str, int] = json.load(file)
 
-# Create the inverted dictionary for reverse lookups (also run only once)
 id_to_name: Dict[int, str] = {value: key for key, value in name_to_id.items()}
 
-# --- Step 2: Create a Fast Lookup Function ---
 
 def item_name(query: int|np.integer|str) -> str|int:
     """
@@ -90,9 +88,9 @@ def rolling_threshold_classification(features:pd.DataFrame, window:int, diffperc
     newfeatures= features.copy()
     
     for i in range(0, features.shape[0], window):
-        end = min(i + window, features.shape[0])  # Handle end boundary
-        rolling_mean = newfeatures.iloc[i:end, :].mean()  # Compute mean for the chunk
-        newfeatures.iloc[i:end, :] = rolling_mean  # Assign the rolling mean to the original DataFrame
+        end = min(i + window, features.shape[0])  
+        rolling_mean = newfeatures.iloc[i:end, :].mean()
+        newfeatures.iloc[i:end, :] = rolling_mean  
         maskhigh = newfeatures.iloc[i:end] > features.iloc[i]*(1+diffpercent/100) #thresholds
         masklow = newfeatures.iloc[i:end] < features.iloc[i]*(1-diffpercent/100)
         newfeatures[maskhigh]=2
@@ -115,15 +113,11 @@ def ensure_datetime_index(s:DataFrameOrSeries) -> DataFrameOrSeries:
     if isinstance(s.index, pd.DatetimeIndex):
         return s.copy()
 
-    # Create the new DatetimeIndex
     new_index = pd.to_datetime(s.index, unit='s', errors='raise', utc=True)
     
-    # Handle DataFrame and Series differently
     if isinstance(s, pd.DataFrame):
-        # For a DataFrame, create a new DataFrame with the new index
         s = s.set_index(new_index)
     elif isinstance(s, pd.Series):
-        # For a Series, directly assign the new index
         s.index = new_index
         
     return s.copy()
@@ -138,27 +132,20 @@ def spread_rolling_z(feature1:pd.Series, feature2:pd.Series, window:int) -> pd.S
 
 def calculate_directional_accuracy(actual_prices: np.ndarray, predicted_prices: np.ndarray) -> float:
    
-    # Ensure arrays are of compatible length for comparison
     if len(actual_prices) != len(predicted_prices):
         raise ValueError("actual_prices and predicted_prices must have the same length.")
 
-    # We need at least two points to determine a direction (current vs. previous)
     if len(actual_prices) < 2:
         return np.nan # Or raise an error, as DA is not meaningful for < 2 points
 
     actual_changes = np.diff(actual_prices)
     predicted_changes_from_last_actual = predicted_prices[1:] - actual_prices[:-1]
 
-    # Option 2: Direction of actual price relative to *previous actual price*
     actual_changes_from_last_actual = actual_prices[1:] - actual_prices[:-1]
 
-    # Determine the signs of changes
     actual_direction = np.sign(actual_changes_from_last_actual)
     predicted_direction = np.sign(predicted_changes_from_last_actual)
 
-    # Handle cases where actual_change is zero (no change) - typically counted as incorrect
-    # unless you explicitly want to count 'no change' as a third category.
-    # For simplicity, we'll count exact zero as wrong if the prediction isn't also zero.
 
     correct_predictions = np.sum(actual_direction == predicted_direction)
 
@@ -186,11 +173,8 @@ def score_tree_model(
     holdout_mase = mase(y_holdout, y_train, holdout_preds, 1)
     holdout_mae = mean_absolute_error(y_holdout, holdout_preds)
 
-    # Calculate Holdout DA
-    # Get the last actual price from the training data before the holdout
     last_train_actual = y_train.iloc[-1]
     
-    # Combine last training actual with holdout actuals mand predictions
     combined_actuals_for_da = np.concatenate(([last_train_actual], y_holdout))
     combined_preds_for_da = np.concatenate(([last_train_actual], holdout_preds))
     
@@ -211,7 +195,6 @@ def mase(y_true:    pd.Series|np.ndarray,
     if naive_mae==0:
         print("WARNING: Naive MAE=0, numerical instability due to epsilon division.")
     if len(y_train) <= m:
-    # Handle cases where y_train is too short for differencing
         print(f"WARNING: y_train length ({len(y_train)}) is too short for period m={m}.")
     return mae_model/np.maximum(naive_mae, np.finfo(np.float64).eps)
 
@@ -326,19 +309,14 @@ def rsi(price_data: pd.Series, periods: int) -> pd.Series:
     
     avg_gain_smoothed = gains.ewm(com=periods - 1, adjust=False).mean()
     avg_loss_smoothed = losses.ewm(com=periods - 1, adjust=False).mean()
-    # 4. Initialize an RSI Series with NaNs
     rsi = pd.Series(np.nan, index=price_data.index)
     
-    # 5. Handle the division by zero case explicitly
-    # Only calculate RS where avg_loss is not zero
     mask = avg_loss_smoothed != 0
     rs = pd.Series(np.nan, index=price_data.index)
     rs[mask] = avg_gain_smoothed[mask] / avg_loss_smoothed[mask]
     
-    # 6. Calculate RSI
     rsi[mask] = 100 - (100 / (1 + rs[mask]))
     
-    # 7. Set RSI to 100 where avg_loss is 0
     rsi[avg_loss_smoothed == 0] = 100
     
     return rsi

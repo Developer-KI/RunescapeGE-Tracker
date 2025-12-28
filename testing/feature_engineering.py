@@ -2,11 +2,8 @@
 import  os
 import  sys
 
-# Get the absolute path of the current file's directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# Go up one level to reach the project root
 project_root = os.path.join(current_dir, '..')
-# Add the project root to the system path
 if project_root not in sys.path:
     sys.path.append(project_root)
 
@@ -18,7 +15,6 @@ cointegration_path = os.path.join(project_root, 'data', 'cointegration_price_mat
 import csv
 import  numpy as np
 import  pandas as pd
-#import  seaborn as sns
 import  matplotlib.pyplot as plt
 import  utils.model_tools as tools
 from utils.model_tools import item_name
@@ -30,7 +26,6 @@ import  utils.api_fetcher as api
 from    utils.announcements_fetcher import get_announcements
 from statsmodels.tsa.stattools import coint
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
-#from arch.unitroot.cointegration import phillips_ouliaris
 from itertools import combinations
 #%% General Prices
 price_data = pipeline.data_preprocess2(read=True, write=False, interp_method='linear', filter_volume=True, filter_threshold=0.98)
@@ -60,15 +55,6 @@ def boss_data(datetime: bool = True) -> tuple[pd.DataFrame, pd.DataFrame, pd.Dat
     if datetime:
         boss_matrix_items.index = pd.to_datetime(boss_matrix_items.index, unit='s', utc=True).tz_convert('US/Eastern')
     return boss_data, boss_matrix_items, boss_vol_matrix_items
-# bandos_index = tools.create_item_index(boss_matrix_items,[
-# tools.item_name("Bandos chestplate"),
-# tools.item_name("Bandos tassets"),
-# tools.item_name("Bandos boots"),
-# tools.item_name("Bandos hilt"),
-# tools.item_name("Godsword shard 1"),
-# tools.item_name("Godsword shard 2"),
-# tools.item_name("Godsword shard 3"),
-# ], 'equal',100)
 
 #Correlations
 def item_corr(price_matrix_items: pd.DataFrame|None = None, vol_matrix_items: pd.DataFrame|None = None) -> tuple[pd.DataFrame|None, pd.DataFrame|None]|pd.DataFrame:
@@ -104,20 +90,6 @@ def market_item_corr(market_index: pd.Series, price_matrix_items) -> pd.Series:
     index_item_corr = price_matrix_items.corrwith(market_index)
     return index_item_corr
 
-#indexes for rune,log,herb,food,metal
-
-# Price History
-#price_corr_items = price_matrix_items[target_item1].rolling(20).corr(price_matrix_items[target_item2])
-#1-period returns
-#returns_item1 = price_matrix_items[target_item1].pct_change()
-#returns_item2 = price_matrix_items[target_item2].pct_change()
-#hourly-returns
-#returns_item1_hourly = tools.calculate_returns(price_matrix_items[target_item1], '1h')
-#returns_item2_hourly = tools.calculate_returns(price_matrix_items[target_item2], '1h')
-#daily-returns
-#returns_item1_hourly = tools.calculate_returns(price_matrix_items[target_item1], '1D')
-#returns_item2_hourly = tools.calculate_returns(price_matrix_items[target_item2], '1D')
-# cyclical time features
 def cyclical_time(price_matrix_items:pd.DataFrame) -> tuple:
     if not isinstance(price_matrix_items.index, pd.DatetimeIndex):
         price_matrix_items.index = pd.to_datetime(price_matrix_items.index, unit='s', utc=True).tz_convert(pytz.timezone('US/Eastern'))  
@@ -145,7 +117,6 @@ def updates_announcements(price_matrix_items: pd.DataFrame) -> tuple[pd.Datetime
         index=update_dates
     )
 
-    # Use pd.merge_asof to find the most recent update for each price point
     merged_df = pd.merge_asof(
         left=price_matrix_items,
         right=updates_df,
@@ -154,17 +125,13 @@ def updates_announcements(price_matrix_items: pd.DataFrame) -> tuple[pd.Datetime
         direction='backward'
     )
     
-     # The merged DataFrame now has a 'last_update' column with the correct timestamps
     last_update_timestamps = merged_df['last_update']
 
-    # Calculate the time difference
     time_difference = price_matrix_items.index - last_update_timestamps
 
-    # Now you can correctly calculate hours and days
     updates_hours_since = time_difference.dt.total_seconds() / 3600
     updates_days_since = time_difference.dt.days
 
-    # You will need to set the index of the final Series to align with your original DataFrame
     updates_hours_since.index = price_matrix_items.index
     updates_days_since.index = price_matrix_items.index
 

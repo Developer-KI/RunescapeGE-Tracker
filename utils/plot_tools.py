@@ -309,8 +309,6 @@ def plot_residuals(data: pd.DataFrame, model, lookback: int = 0) -> np.ndarray:
     plt.show()
     return residuals
 
-#TODO make sure statistics arent calculated on outliers
-# removed shapiro test
 
 def plot_pred_vs_price(data: pd.DataFrame, predictions: np.ndarray, holdout_pred_n:int, lookback: int = 0, fill_outliers=None, std_factor: float = 1.96):
     if fill_outliers is not None:
@@ -320,7 +318,6 @@ def plot_pred_vs_price(data: pd.DataFrame, predictions: np.ndarray, holdout_pred
     else:
             Y = data[data.columns[0]].to_numpy()
     item = int(data.columns[0])
-    # Preserve original timestamps for plotting
     time_index = data.index.to_numpy()  
     adj_index = time_index[-lookback:]
     

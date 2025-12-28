@@ -1,11 +1,7 @@
 #%% 
 import  os, sys
-#For relative pathing
-# Get the absolute path of the current file's directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# Go up one level to reach the project root
 project_root = os.path.join(current_dir, '..')
-# Add the project root to the system path
 if project_root not in sys.path:
     sys.path.append(project_root)
 #%%
