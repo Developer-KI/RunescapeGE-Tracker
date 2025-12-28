@@ -46,74 +46,75 @@ Numerous difficulties arise in trying to present returns of the Runescape, of wh
 As we observe, market movements take multiple hours for price correlations to decay, suggesting highly effective momentum-based strategies if automated trading were permitted. 
 
 ### PCA Analysis of Market Structure
-We conducted a PCA analysis of the market correlations using the original 326-item correlation matrix. By using robust PCA techniques to decompose the price data into a sparse outlier matrix, we use the cleaned matrix for PCA. Particularly, this may be warranted working on shorter time-frames where prices are subject to extreme spikes from botting activity or sudden dumps of items on the market. 
+We conducted a PCA analysis of the market correlations using the original 326-item correlation matrix. By using robust[^3] PCA techniques to decompose the price data into a sparse outlier matrix, we use the cleaned matrix for PCA. Particularly, this may be warranted working on shorter time-frames where prices are subject to extreme spikes from botting activity or sudden dumps of items on the market. 
+[^3]: Robust PCA implementation can be found at https://github.com/dganguli/robust-pca
 
 Decomposing the cleaned matrix and sorting eigenvalues, we construct the spectrum chart given below for 5-minute data. To ensure a reliable null for significant eigenvalue-eigenvector pairs, we performed multiple permutations of time series data and similarly decomposed their correlation matrices to create a baseline floor of "noise" which we can compare against; the red datapoint correspond with 50 random permutations plotted on top of each other. It is worth noting the noise floor looks especially "tight" as if a single line given the extremely large sample relative to dimension (29,000:326). Finally, we consult the previous observations in the ACF plot and perform shuffling in 4-hour blocks to preserve autocorreltion in the data. This approach is superior, albeit more computationally intensive, to a deterministic null given by a Marchenko Pastur distribution of random matrix eigenvalues since we may drop any i.i.d or homoskedasticity assumptions. Rotation of principal components may be done generally for interpretation, but such techniques fail with small noisy signals as in our case and are generally unecessary.
 
 ![alt text](Images/signal_noise_ratio_permutation_test_log_returns2.png)
 ![alt text](Images/factor_clusters_5m_dense.png)
 
-| **Factor 1:** | | **Factor 2:** | |
-| :--- | :--- | :--- | :--- |
-| **Item Name** | **Weight** | **Item Name** | **Weight** |
-| Air rune | 0.3640 | Runite bolts | -0.5110 |
-| Water rune | 0.3568 | Water orb | -0.4740 |
-| Fire rune | 0.3440 | Air rune | 0.1873 |
-| Earth rune | 0.3326 | Water rune | 0.1812 |
-| Death rune | 0.2521 | Adamant arrow | -0.1750 |
-| Chaos rune | 0.2256 | Earth rune | 0.1677 |
-| Cosmic rune | 0.2144 | Fire rune | 0.1638 |
-| Nature rune | 0.2132 | Rune arrow | -0.1609 |
-| Soul rune | 0.2131 | Adamant dart | -0.1554 |
-| Law rune | 0.2104 | Rune platelegs | -0.1554 |
+| **Factor 1:** |            | **Factor 2:**  |            |
+| :------------ | :--------- | :------------- | :--------- |
+| **Item Name** | **Weight** | **Item Name**  | **Weight** |
+| Air rune      | 0.3640     | Runite bolts   | -0.5110    |
+| Water rune    | 0.3568     | Water orb      | -0.4740    |
+| Fire rune     | 0.3440     | Air rune       | 0.1873     |
+| Earth rune    | 0.3326     | Water rune     | 0.1812     |
+| Death rune    | 0.2521     | Adamant arrow  | -0.1750    |
+| Chaos rune    | 0.2256     | Earth rune     | 0.1677     |
+| Cosmic rune   | 0.2144     | Fire rune      | 0.1638     |
+| Nature rune   | 0.2132     | Rune arrow     | -0.1609    |
+| Soul rune     | 0.2131     | Adamant dart   | -0.1554    |
+| Law rune      | 0.2104     | Rune platelegs | -0.1554    |
 
 ---
 
-| **Factor 3:** | | **Factor 4:** | |
-| :--- | :--- | :--- | :--- |
-| **Item Name** | **Weight** | **Item Name** | **Weight** |
-| Water orb | 0.4287 | Falador teleport (tablet) | 0.2886 |
-| Runite bolts | 0.4124 | Ardougne teleport (tablet) | 0.2604 |
-| Rune full helm | -0.2403 | Varrock teleport (tablet) | 0.2398 |
-| Rune plateskirt | -0.2314 | Lumbridge teleport (tablet) | 0.2382 |
-| Rune pickaxe | -0.2207 | Rune full helm | -0.1984 |
-| Rune platelegs | -0.2173 | Rune plateskirt | -0.1951 |
-| Rune chainbody | -0.1923 | Camelot teleport (tablet) | 0.1817 |
-| Rune platebody | -0.1759 | Rune platelegs | -0.1737 |
-| Adamant dart | 0.1614 | Rune chainbody | -0.1728 |
-| Air rune | 0.1420 | Saradomin brew(4) | 0.1685 |
+| **Factor 3:**   |            | **Factor 4:**               |            |
+| :-------------- | :--------- | :-------------------------- | :--------- |
+| **Item Name**   | **Weight** | **Item Name**               | **Weight** |
+| Water orb       | 0.4287     | Falador teleport (tablet)   | 0.2886     |
+| Runite bolts    | 0.4124     | Ardougne teleport (tablet)  | 0.2604     |
+| Rune full helm  | -0.2403    | Varrock teleport (tablet)   | 0.2398     |
+| Rune plateskirt | -0.2314    | Lumbridge teleport (tablet) | 0.2382     |
+| Rune pickaxe    | -0.2207    | Rune full helm              | -0.1984    |
+| Rune platelegs  | -0.2173    | Rune plateskirt             | -0.1951    |
+| Rune chainbody  | -0.1923    | Camelot teleport (tablet)   | 0.1817     |
+| Rune platebody  | -0.1759    | Rune platelegs              | -0.1737    |
+| Adamant dart    | 0.1614     | Rune chainbody              | -0.1728    |
+| Air rune        | 0.1420     | Saradomin brew(4)           | 0.1685     |
 
 ---
 
-| **Factor 5:** | | **Factor 6:** | |
-| :--- | :--- | :--- | :--- |
-| **Item Name** | **Weight** | **Item Name** | **Weight** |
-| Falador teleport (tablet) | 0.3449 | Blighted anglerfish | 0.2241 |
-| Lumbridge teleport (tablet) | 0.3189 | Blighted karambwan | 0.2037 |
-| Ardougne teleport (tablet) | 0.3123 | Rune longsword | 0.1956 |
-| Varrock teleport (tablet) | 0.2904 | Rune med helm | 0.1847 |
-| Camelot teleport (tablet) | 0.2320 | Blighted super restore(4) | 0.1725 |
-| Soul rune | -0.1875 | Ranging potion(4) | 0.1599 |
-| Rune longsword | 0.1855 | Blighted manta ray | 0.1575 |
-| Rune platelegs | 0.1534 | Saradomin brew(4) | 0.1555 |
-| Death rune | -0.1430 | Super combat potion(4) | 0.1522 |
-| Chaos rune | -0.1327 | Stamina potion(4) | 0.1506 |
+| **Factor 5:**               |            | **Factor 6:**             |            |
+| :-------------------------- | :--------- | :------------------------ | :--------- |
+| **Item Name**               | **Weight** | **Item Name**             | **Weight** |
+| Falador teleport (tablet)   | 0.3449     | Blighted anglerfish       | 0.2241     |
+| Lumbridge teleport (tablet) | 0.3189     | Blighted karambwan        | 0.2037     |
+| Ardougne teleport (tablet)  | 0.3123     | Rune longsword            | 0.1956     |
+| Varrock teleport (tablet)   | 0.2904     | Rune med helm             | 0.1847     |
+| Camelot teleport (tablet)   | 0.2320     | Blighted super restore(4) | 0.1725     |
+| Soul rune                   | -0.1875    | Ranging potion(4)         | 0.1599     |
+| Rune longsword              | 0.1855     | Blighted manta ray        | 0.1575     |
+| Rune platelegs              | 0.1534     | Saradomin brew(4)         | 0.1555     |
+| Death rune                  | -0.1430    | Super combat potion(4)    | 0.1522     |
+| Chaos rune                  | -0.1327    | Stamina potion(4)         | 0.1506     |
 
 ---
 
-| **Factor 7:** | | **Factor 8:** | |
-| :--- | :--- | :--- | :--- |
-| **Item Name** | **Weight** | **Item Name** | **Weight** |
-| Bandos tassets | -0.5213 | Rune longsword | -0.3363 |
-| Bandos chestplate | -0.5197 | Rune med helm | -0.2890 |
-| Rune longsword | 0.1636 | Bandos chestplate | -0.2881 |
-| Rune med helm | 0.1589 | Bandos tassets | -0.2856 |
-| Amulet of torture | -0.1554 | Rune mace | -0.2709 |
-| Rune plateskirt | -0.1236 | Rune plateskirt | 0.2079 |
-| Rune mace | 0.1229 | Rune battleaxe | -0.2029 |
-| Blighted karambwan | 0.1182 | Rune warhammer | -0.1781 |
-| Rune warhammer | 0.1116 | Rune full helm | 0.1739 |
-| Soul rune | 0.0991 | Rune pickaxe | 0.1498 |
+| **Factor 7:**      |            | **Factor 8:**     |            |
+| :----------------- | :--------- | :---------------- | :--------- |
+| **Item Name**      | **Weight** | **Item Name**     | **Weight** |
+| Bandos tassets     | -0.5213    | Rune longsword    | -0.3363    |
+| Bandos chestplate  | -0.5197    | Rune med helm     | -0.2890    |
+| Rune longsword     | 0.1636     | Bandos chestplate | -0.2881    |
+| Rune med helm      | 0.1589     | Bandos tassets    | -0.2856    |
+| Amulet of torture  | -0.1554    | Rune mace         | -0.2709    |
+| Rune plateskirt    | -0.1236    | Rune plateskirt   | 0.2079     |
+| Rune mace          | 0.1229     | Rune battleaxe    | -0.2029    |
+| Blighted karambwan | 0.1182     | Rune warhammer    | -0.1781    |
+| Rune warhammer     | 0.1116     | Rune full helm    | 0.1739     |
+| Soul rune          | 0.0991     | Rune pickaxe      | 0.1498     |
 
 At short timeframes, we unsurprisingly find an extremely fragmented economy with weak correlations among clusters of high volume items. The largest eigenvalue consisted of all runes as top eigenvector loadings, items which consist of the highest frequency of trade and necessary for vast swaths of gameplay and in massive supply. Additionally, teleport items and other consumables were very present in top factors, but stretched across multiple eigenvectors. Despite this, factors 7 and 8 had much more clear armor categories, specifically corresponding with loot drops from popular high-activity enemies in-game. 
 
@@ -129,53 +130,53 @@ Since these results lack any strong, generalizable "market" or "beta" factor, we
 Similarly, despite a concentration of principal component variances, we do not observe any particular dominant market factor:
 
 
-| **Factor 1:** | | **Factor 2:** | |
-| :--- | :--- | :--- | :--- |
-| **Item Name** | **Weight** | **Item Name** | **Weight** |
-| Snapdragon seed | 0.1586 | Rune chainbody | 0.2094 |
-| Yew seed | 0.1431 | Rune battleaxe | 0.1991 |
-| Magic seed | 0.1398 | Rune full helm | 0.1985 |
-| Ranarr seed | 0.1338 | Rune longsword | 0.1916 |
-| Magic logs | 0.1334 | Rune kiteshield | 0.1756 |
-| Palm tree seed | 0.1330 | Rune platebody | 0.1665 |
-| Torstol seed | 0.1194 | Rune warhammer | 0.1613 |
-| Dragon bones | 0.1163 | Rune pickaxe | 0.1611 |
-| Gold ore | 0.1159 | Amulet of torture | -0.1604 |
-| Grimy irit leaf | 0.1123 | Necklace of anguish | -0.1534 |
+| **Factor 1:**   |            | **Factor 2:**       |            |
+| :-------------- | :--------- | :------------------ | :--------- |
+| **Item Name**   | **Weight** | **Item Name**       | **Weight** |
+| Snapdragon seed | 0.1586     | Rune chainbody      | 0.2094     |
+| Yew seed        | 0.1431     | Rune battleaxe      | 0.1991     |
+| Magic seed      | 0.1398     | Rune full helm      | 0.1985     |
+| Ranarr seed     | 0.1338     | Rune longsword      | 0.1916     |
+| Magic logs      | 0.1334     | Rune kiteshield     | 0.1756     |
+| Palm tree seed  | 0.1330     | Rune platebody      | 0.1665     |
+| Torstol seed    | 0.1194     | Rune warhammer      | 0.1613     |
+| Dragon bones    | 0.1163     | Rune pickaxe        | 0.1611     |
+| Gold ore        | 0.1159     | Amulet of torture   | -0.1604    |
+| Grimy irit leaf | 0.1123     | Necklace of anguish | -0.1534    |
 
 ---
 
 
-| **Factor 3:** | | **Factor 4:** | |
-| :--- | :--- | :--- | :--- |
-| **Item Name** | **Weight** | **Item Name** | **Weight** |
-| Amulet of torture | -0.1542 | Grimy ranarr weed | 0.1855 |
-| Necklace of anguish | -0.1519 | Ranarr weed | 0.1772 |
-| Bandos godsword | -0.1402 | Grimy avantoe | 0.1527 |
-| Ranarr potion (unf) | -0.1394 | Necklace of anguish | -0.1449 |
-| Bandos chestplate | -0.1380 | Avantoe | 0.1434 |
-| Rune platebody | -0.1377 | Amulet of torture | -0.1364 |
-| Prayer potion(4) | -0.1355 | Sunfire splinters | -0.1335 |
-| Rune chainbody | -0.1301 | Ranarr potion (unf) | 0.1324 |
-| Rune kiteshield | -0.1298 | Coal | 0.1307 |
-| Bandos tassets | -0.1297 | Prayer potion(4) | 0.1208 |
+| **Factor 3:**       |            | **Factor 4:**       |            |
+| :------------------ | :--------- | :------------------ | :--------- |
+| **Item Name**       | **Weight** | **Item Name**       | **Weight** |
+| Amulet of torture   | -0.1542    | Grimy ranarr weed   | 0.1855     |
+| Necklace of anguish | -0.1519    | Ranarr weed         | 0.1772     |
+| Bandos godsword     | -0.1402    | Grimy avantoe       | 0.1527     |
+| Ranarr potion (unf) | -0.1394    | Necklace of anguish | -0.1449    |
+| Bandos chestplate   | -0.1380    | Avantoe             | 0.1434     |
+| Rune platebody      | -0.1377    | Amulet of torture   | -0.1364    |
+| Prayer potion(4)    | -0.1355    | Sunfire splinters   | -0.1335    |
+| Rune chainbody      | -0.1301    | Ranarr potion (unf) | 0.1324     |
+| Rune kiteshield     | -0.1298    | Coal                | 0.1307     |
+| Bandos tassets      | -0.1297    | Prayer potion(4)    | 0.1208     |
 
 ---
 
 ### **Factor 5:**
 
-| ID | Weight | Item Name |
-| :--- | :--- | :--- |
-| 1207 | 0.2158 | Grimy ranarr weed |
-| 257 | 0.2038 | Ranarr weed |
-| 99 | 0.1995 | Ranarr potion (unf) |
-| 5298 | -0.1752 | Avantoe seed |
-| 8778 | 0.1712 | Oak plank |
-| 5301 | -0.1602 | Cadantine seed |
-| 573 | 0.1532 | Air orb |
-| 3051 | 0.1446 | Grimy snapdragon |
-| 3000 | 0.1420 | Snapdragon |
-| 453 | -0.1298 | Coal |
+| ID   | Weight  | Item Name           |
+| :--- | :------ | :------------------ |
+| 1207 | 0.2158  | Grimy ranarr weed   |
+| 257  | 0.2038  | Ranarr weed         |
+| 99   | 0.1995  | Ranarr potion (unf) |
+| 5298 | -0.1752 | Avantoe seed        |
+| 8778 | 0.1712  | Oak plank           |
+| 5301 | -0.1602 | Cadantine seed      |
+| 573  | 0.1532  | Air orb             |
+| 3051 | 0.1446  | Grimy snapdragon    |
+| 3000 | 0.1420  | Snapdragon          |
+| 453  | -0.1298 | Coal                |
 
 These results are surprisingly highly interpretable, and confirms the theory that Runescape's market is highly fragmented. Despite this, clear sectors drive the market albeit with small influences. In particular, market activity mainly revolves around skill training, player-versus-player combat, and boss-fighting combat gameplay loops. This is evidenced by factors relating with seed trade (farming skills), boss drops (armor sets and tools), and consumables, likely in support of previously described sectors. Given such clear clustering along with causal reasoning, this motivates strategies involving cointegration, pairs-trading, and a method of short-selling by trading negatively-correlated commodities.
 
