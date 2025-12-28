@@ -164,20 +164,19 @@ Similarly, despite a concentration of principal component variances, we do not o
 
 ---
 
-### **Factor 5:**
-
-| ID   | Weight  | Item Name           |
-| :--- | :------ | :------------------ |
-| 1207 | 0.2158  | Grimy ranarr weed   |
-| 257  | 0.2038  | Ranarr weed         |
-| 99   | 0.1995  | Ranarr potion (unf) |
-| 5298 | -0.1752 | Avantoe seed        |
-| 8778 | 0.1712  | Oak plank           |
-| 5301 | -0.1602 | Cadantine seed      |
-| 573  | 0.1532  | Air orb             |
-| 3051 | 0.1446  | Grimy snapdragon    |
-| 3000 | 0.1420  | Snapdragon          |
-| 453  | -0.1298 | Coal                |
+| **Factor 5:**       |            |
+| :------------------ | :--------- |
+| **Item Name**       | **Weight** |
+| Grimy ranarr weed   | 0.2158     |
+| Ranarr weed         | 0.2038     |
+| Ranarr potion (unf) | 0.1995     |
+| Avantoe seed        | -0.1752    |
+| Oak plank           | 0.1712     |
+| Cadantine seed      | -0.1602    |
+| Air orb             | 0.1532     |
+| Grimy snapdragon    | 0.1446     |
+| Snapdragon          | 0.1420     |
+| Coal                | -0.1298    |
 
 These results are surprisingly highly interpretable, and confirms the theory that Runescape's market is highly fragmented. Despite this, clear sectors drive the market albeit with small influences. In particular, market activity mainly revolves around skill training, player-versus-player combat, and boss-fighting combat gameplay loops. This is evidenced by factors relating with seed trade (farming skills), boss drops (armor sets and tools), and consumables, likely in support of previously described sectors. Given such clear clustering along with causal reasoning, this motivates strategies involving cointegration, pairs-trading, and a method of short-selling by trading negatively-correlated commodities.
 
