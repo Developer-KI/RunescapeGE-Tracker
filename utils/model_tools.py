@@ -343,44 +343,6 @@ def rsi(price_data: pd.Series, periods: int) -> pd.Series:
     
     return rsi
 
-def hurst(data: pd.Series) -> float:
-    for n in range(10, 100, 10):
-        # Skip if n is not an integer divisor of the data length.
-        # This is not strictly necessary but ensures clean chunks.
-        if 1000 % n != 0:
-            continue
-        
-        # Divide the series into n chunks
-        chunks = np.array_split(data, 1000 // n)
-
-        # Calculate the mean and standard deviation for each chunk
-        rs_n = []
-        for chunk in chunks:
-            mean_chunk = chunk.mean()
-            std_chunk = chunk.std()
-            
-            # Calculate cumulative deviations from the mean
-            cumulative_deviation = np.cumsum(chunk - mean_chunk)
-            
-            # Calculate the rescaled range
-            # Use a small value to avoid division by zero for flat chunks
-            if std_chunk != 0:
-                rs_n.append((np.max(cumulative_deviation) - np.min(cumulative_deviation)) / std_chunk)
-
-        if rs_n:
-            rs_values.append(np.mean(rs_n))
-            n_values.append(n)
-
-    # Now, you have the n_values and their corresponding average R/S values.
-    # The Hurst exponent is the slope of the line that fits the
-    # log-log plot of these values.
-    log_rs = np.log(rs_values)
-    log_n = np.log(n_values)
-
-    # Use polyfit to find the slope (Hurst exponent)
-    hurst_exponent = np.polyfit(log_n, log_rs, 1)[0]
-    return hurst_exponent
-
 def volatility_market(price_data: pd.DataFrame, aggregation: str|None = None, smoothing: int = 20) -> pd.Series:
     #Aggregate volatility
     volatility_items = calculate_returns(price_data, aggregation)
