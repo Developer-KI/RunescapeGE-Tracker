@@ -1,12 +1,12 @@
 import  pandas as pd
 import  numpy as np
 import  matplotlib.pyplot as plt
-import  utils.api_fetcher as fetcher
+import  src.data_ingestion.api_fetcher as fetcher
 import  scipy.stats as stats
 import  os
 from    matplotlib.ticker import MaxNLocator, ScalarFormatter
-import  utils.model_tools as tools
-from    utils.data_pipeline import alchemy_preprocess, data_preprocess2 
+import  src.utils.model_tools as tools
+from    src.data_ingestion.data_pipeline import alchemy_preprocess, data_preprocess2 
 from    sklearn.metrics import mean_absolute_error
 from    matplotlib.gridspec import GridSpec
 from    statsmodels.tsa.api import SimpleExpSmoothing

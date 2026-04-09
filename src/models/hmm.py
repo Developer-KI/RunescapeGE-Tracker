@@ -2,8 +2,8 @@
 import numpy as np
 import pandas as pd
 from   hmmlearn.hmm import MultinomialHMM
-from   utils.plot_tools import plot_classification_vs_price
-from utils.model_tools import rolling_threshold_classification
+from   src.utils.plot_tools import plot_classification_vs_price
+from src.utils.model_tools import rolling_threshold_classification
 from   sklearn.preprocessing import OneHotEncoder
 #%%
 def hmm_data_prep(raw_features:pd.DataFrame, item:str, window:int=100, diff_percent:float=0.1) -> tuple: 

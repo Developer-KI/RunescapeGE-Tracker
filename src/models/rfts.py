@@ -4,8 +4,8 @@ import optuna
 from   sklearn.ensemble import RandomForestRegressor
 from   sklearn.model_selection import TimeSeriesSplit
 from   sklearn.metrics import mean_absolute_error
-from   utils import model_tools as tools
-import utils.outlier_detection as outlier
+from   src.utils import model_tools as tools
+import src.data_processing.outlier_detection as outlier
 from   statsmodels.tsa.stattools import adfuller
 from   typing import Literal
 #from   scipy.stats import boxcox

@@ -1,4 +1,4 @@
-from utils.model_tools import item_name
+from src.utils.model_tools import item_name
 
 alchemical_hydra = [
 item_name("Hydra tail"),

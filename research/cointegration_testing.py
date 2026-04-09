@@ -12,10 +12,10 @@ if project_root not in sys.path:
 import  pandas as pd, numpy as np
 from    matplotlib import pyplot as plt
 from    matplotlib import ticker as mticker
-import  feature_engineering as get
-import  utils.plot_tools as myplot
-import  utils.outlier_detection as outlier
-from    utils.model_tools import item_name
+import  src.data_processing.feature_engineering as get
+import  src.utils.plot_tools as myplot
+import  src.data_processing.outlier_detection as outlier
+from    src.utils.model_tools import item_name
 #%%
 price_data = get.price_data
 price_matrix_items, vol_matrix_items = get.item_data(price_data, False)
@@ -49,8 +49,8 @@ os.environ['R_HOME'] = r_path
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.packages import importr
 import rpy2.robjects as ro
-from utils.data_pipeline import data_explicit_preprocess
-from utils.model_tools import item_name
+from src.data.data_pipeline import data_explicit_preprocess
+from src.utils.model_tools import item_name
 import statsmodels.api as sm
 from itertools import combinations
 

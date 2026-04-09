@@ -7,12 +7,12 @@ import os
 import sys
 project_root = os.path.abspath(os.path.join(os.getcwd(), '..'))
 if project_root not in sys.path: sys.path.append(project_root)
-from   utils.model_tools import item_name, volatility_market
-import utils.plot_tools as myplot
+from   src.utils.model_tools import item_name, volatility_market
+import src.utils.plot_tools as myplot
 from   scipy.stats import norm, t, kurtosis, skew, jarque_bera, probplot, skewtest
 import seaborn as sns
-import utils.model_tools as tools
-import testing.feature_engineering as get
+import src.utils.model_tools as tools
+import src.data_processing.feature_engineering as get
 
 plt.rcParams.update({
     "figure.facecolor": "#000000",  
@@ -243,7 +243,7 @@ price_matrix_log_returns = np.log(1+price_matrix_returns).iloc[1:]
 #%%
 log_item_corr = price_matrix_log_returns.corr()
 
-import testing.r_pca.r_pca as r_pca
+import src.data_processing.r_pca as r_pca
 daily_rpca = r_pca.R_pca(log_item_corr.values)
 L, S = daily_rpca.fit(max_iter=10000, iter_print=100)
 
@@ -438,7 +438,7 @@ daily_price_matrix_log_returns = np.log(1+daily_price_matrix_returns)
 #%%
 daily_log_item_corr = daily_price_matrix_log_returns.corr()
 #robust PCA
-import testing.r_pca.r_pca as r_pca
+import src.data_processing.r_pca as r_pca
 daily_rpca = r_pca.R_pca(daily_log_item_corr.values)
 L, S = daily_rpca.fit(max_iter=10000, iter_print=100)
 #%%

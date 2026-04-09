@@ -1,30 +1,29 @@
 #%% 
 import  os, sys
+
+from src.models import exp_smoothing as myEXPS, hmm as myHMM, rfts as myRFTS
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.join(current_dir, '..')
 if project_root not in sys.path:
     sys.path.append(project_root)
 #%%
 import  pandas as pd, numpy as np
-from    utils.model_tools import (
+from    src.utils.model_tools import (
     target_rolling_features, 
     create_feature_lags, 
     volatility_market, 
     item_name, 
     create_item_index
 )
-import  utils.plot_tools as myplot
-from    models import (
-    rfts as myRFTS, 
-    xgb as myXGB, 
-    hmm as myHMM, 
-    exp_smoothing as myEXPS
+import  src.utils.plot_tools as myplot
+from    src.models import (
+    xgb as myXGB
     )
 from    matplotlib import pyplot as plt
 from    matplotlib import ticker as mticker
-import  feature_engineering as get
-import utils.outlier_detection as outlier
-from utils.model_tools import item_name
+import  src.data_processing.feature_engineering as get
+import src.data_processing.outlier_detection as outlier
+from src.utils.model_tools import item_name
 import seaborn as sns
 #%%
 price_data = get.price_data

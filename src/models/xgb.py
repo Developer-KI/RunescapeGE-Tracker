@@ -6,8 +6,8 @@ from   warnings import simplefilter
 from   xgboost import XGBRegressor
 from   sklearn.model_selection import TimeSeriesSplit
 from   sklearn.metrics import mean_absolute_error
-from   utils import model_tools as tools
-import utils.outlier_detection as outlier
+from   src.utils import model_tools as tools
+import src.data_processing.outlier_detection as outlier
 #import scipy.stats as scistats
 #from statsmodels.tsa.stattools import adfuller
 

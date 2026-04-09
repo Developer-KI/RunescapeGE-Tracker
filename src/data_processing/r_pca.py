@@ -7,13 +7,6 @@ try:
 except ImportError:
     print('Unable to import pylab. R_pca.plot_fit() will not work.')
 
-try:
-    # Python 2: 'xrange' is the iterative version
-    range = xrange
-except NameError:
-    # Python 3: 'range' is iterative - no need for 'xrange'
-    pass
-
 
 class R_pca:
 

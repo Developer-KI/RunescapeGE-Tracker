@@ -16,14 +16,14 @@ import csv
 import  numpy as np
 import  pandas as pd
 import  matplotlib.pyplot as plt
-import  utils.model_tools as tools
-from utils.model_tools import item_name
-import  utils.plot_tools as myplot
-import  utils.data_pipeline as pipeline
+import  src.utils.model_tools as tools
+from src.utils.model_tools import item_name
+import  src.utils.plot_tools as myplot
+import  src.data_ingestion.data_pipeline as pipeline
 import  pytz
 from    data.bosstables import bosstables_list as BOSSTABLES_LIST
-import  utils.api_fetcher as api
-from    utils.announcements_fetcher import get_announcements
+import  src.data_ingestion.api_fetcher as api
+from    src.data_ingestion.announcements_fetcher import get_announcements
 from statsmodels.tsa.stattools import coint
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 from itertools import combinations
