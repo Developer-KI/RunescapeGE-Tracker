@@ -1,16 +1,14 @@
 #%%
-import  os
-import  sys
+import sys
+from pathlib import Path
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.join(current_dir, '..')
-if project_root not in sys.path:
-    sys.path.append(project_root)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_ROOT / "data"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.join(script_dir, '..')
-boss_file_path = os.path.join(project_root, 'data', 'processed_bosstables.csv')
-cointegration_path = os.path.join(project_root, 'data', 'cointegration_price_matrix.csv')
+boss_file_path = DATA_DIR / "processed_bosstables.csv"
+cointegration_path = DATA_DIR / "cointegration_price_matrix.csv"
 
 import csv
 import  numpy as np
@@ -19,10 +17,10 @@ import  matplotlib.pyplot as plt
 import  src.utils.model_tools as tools
 from src.utils.model_tools import item_name
 import  src.utils.plot_tools as myplot
-import  src.data_ingestion.data_pipeline as pipeline
+import  src.data_processing.data_pipeline as pipeline
 import  pytz
 from    data.bosstables import bosstables_list as BOSSTABLES_LIST
-import  src.data_ingestion.api_fetcher as api
+import  src.data_ingestion.data_fetcher as api
 from    src.data_ingestion.announcements_fetcher import get_announcements
 from statsmodels.tsa.stattools import coint
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
@@ -145,7 +143,7 @@ def cointegration_pairs(price_matrix_items: pd.DataFrame, scrape: bool = False) 
     else:
         processed_pairs = set()
 
-        if os.path.exists(cointegration_path):
+        if cointegration_path.exists():
             print(f"Existing file found. Resuming from last run.")
             with open(cointegration_path, 'r', newline='') as f:
                 reader = csv.reader(f)
@@ -160,7 +158,7 @@ def cointegration_pairs(price_matrix_items: pd.DataFrame, scrape: bool = False) 
         with open(cointegration_path, 'a', newline='') as f:
             writer = csv.writer(f)
 
-            if os.path.getsize(cointegration_path) == 0:
+            if cointegration_path.stat().st_size == 0:
                 writer.writerow(['item1','item2','p_value'])
 
             for item1, item2 in combinations(price_matrix_items.columns, 2):

@@ -6,3 +6,5 @@ scikit-learn
 xgboost
 scipy
 optuna
+factor_analyzer
+networkx

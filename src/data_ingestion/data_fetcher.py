@@ -1,11 +1,15 @@
 #%%
+from pathlib import Path
 import requests
 import pandas as pd
 import time
 from   datetime import datetime
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_ROOT / "data"
 #%%
 headers = {
-    'User-Agent': 'Price/Volume Tracker and Scraper- NoHFT',
+    'User-Agent': 'Price/Volume Tracker and Scraper - NoHFT',
     'From': 'mstavreff@outlook.com, discord: shrimpsalad'
 }
 
@@ -91,8 +95,7 @@ def fetch_historical_5m(n = 10, mins=5, waits=1.1, timestamp: int = 0) -> pd.Dat
     df = fetch_5min(unix_timestamp_seconds)
 
     if df.empty:
-        print(f"API returned an empty dataset for initial timestamp {unix_timestamp_seconds}. Returning empty DataFrame.")
-        return df
+        print(f"API returned an empty dataset for timestamp {unix_timestamp_seconds}. Trying earlier timestamps.")
 
     for t in range(1, n):
         df_t = fetch_5min(unix_timestamp_seconds - (mins * 60) * t)
@@ -109,12 +112,12 @@ def fetch_historical_5m(n = 10, mins=5, waits=1.1, timestamp: int = 0) -> pd.Dat
     return df[['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp']]
 
 ### When forward mining its mandatory to include duplication deletion in case of getting to present. For opening mine forward direction is not possible
-def writing_returns(filepath: str = "./data/data.csv", n_periods: int = 100, p_chunks: int= 10, timestamp=None, del_duplicates: bool = True, mining_forward: bool = False) -> None:
+def writing_returns(filepath = DATA_DIR / "data.csv", n_periods: int = 100, p_chunks: int= 10, timestamp=None, del_duplicates: bool = True, mining_forward: bool = False) -> None:
     #1 for backward and -1 for forward
     direction = 1
 
     #Line index 0: Timestamp of start of data 1: Timestamp of end of data 2: Lenght of timestamp data for each item
-    with open("./data/data_properties.txt", "r") as file:
+    with open(DATA_DIR / "data_properties.txt", "r") as file:
         lines = file.readlines()
 
     # Main logic for selecting the mining mode
@@ -148,6 +151,7 @@ def writing_returns(filepath: str = "./data/data.csv", n_periods: int = 100, p_c
         direction = 1
 
     print(f"Initialized process. Expected mining time: {round(n_periods * p_chunks * 1.1 / 60, 3)} minutes")
+    is_new_session = not lines
     first_call_timestamp = timestamp_start
     last_call_timestamp = 0
 
@@ -168,15 +172,15 @@ def writing_returns(filepath: str = "./data/data.csv", n_periods: int = 100, p_c
             if mining_forward==True:
                 last_call_timestamp = int(lines[1].strip())
                 first_call_timestamp = df_t.iloc[0]['timestamp']
-            elif mining_forward==False and series_length == 0:
-                first_call_timestamp = int(datetime.now().timestamp()) - int(datetime.now().timestamp()) % 300
-                last_call_timestamp = first_call_timestamp
+            elif is_new_session:
+                # first_call_timestamp stays as timestamp_start (set before loop)
+                last_call_timestamp = df_t.iloc[-1]['timestamp']
             else:
                 first_call_timestamp = int(lines[0].strip())
                 last_call_timestamp = df_t.iloc[-1]['timestamp']
 
             #Saving to data properties
-            with open("./data/data_properties.txt", "w") as file:
+            with open(DATA_DIR / "data_properties.txt", "w") as file:
                 file.write(f"{first_call_timestamp}\n")
                 file.write(f"{last_call_timestamp}\n")
                 file.write(f"{series_length}\n")
@@ -296,6 +300,5 @@ def fetch_latest_idex_df():
     return df
 #%%
 if __name__ == "__main__":
-    #writing_returns(n=10, p=500, timestamp=1747701935,del_duplicates=False)
-    writing_returns(n_periods=2, p_chunks=2,del_duplicates=False, mining_forward=True)
+    writing_returns(n_periods=10, p_chunks=500)
 #run as .py file

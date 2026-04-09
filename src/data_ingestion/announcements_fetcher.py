@@ -1,16 +1,13 @@
 #%%
-import  os
 import sys
-# Get the absolute path of the current file's directory
-current_dir = os.path.dirname(os.path.abspath(__file__))
-# Go up one level to reach the project root
-project_root = os.path.join(current_dir, '..')
-# Add the project root to the system path
-if project_root not in sys.path:
-    sys.path.append(project_root)
+from pathlib import Path
 
-# Construct the full, absolute path to the cache file
-cache_path = os.path.join(current_dir, '..', 'data', 'announcements_cache.csv')
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_ROOT / "data"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+cache_path = DATA_DIR / "announcements_cache.csv"
     
 
 import  pandas as pd, numpy as np
@@ -128,7 +125,7 @@ def get_announcements(cache_file_path=cache_path, scrape: bool = False) -> pd.Da
     """
     
     # Check if a cache file exists
-    if os.path.exists(cache_file_path):
+    if cache_file_path.exists():
         print("Cache file found. Reading existing data...")
         # Load the existing data
         cached_df = pd.read_csv(cache_file_path, parse_dates=['timestamp'])

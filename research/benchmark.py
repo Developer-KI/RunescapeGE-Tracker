@@ -1,11 +1,12 @@
-#%% 
-import  os, sys
+#%%
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.models import exp_smoothing as myEXPS, hmm as myHMM, rfts as myRFTS
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.join(current_dir, '..')
-if project_root not in sys.path:
-    sys.path.append(project_root)
 #%%
 import  pandas as pd, numpy as np
 from    src.utils.model_tools import (
@@ -40,6 +41,7 @@ target_item = 1603
 smoothing_adjustment = 20
 
 vol_items_reg = vol_matrix_items[[target_item]]
+price_items_reg = price_matrix_items[[target_item]]
 price_items_reg.columns = [f'{target_item}']
 vol_items_reg.columns = [f'{target_item}_vol']
 volatility_index = volatility_market(price_matrix_items, smoothing=smoothing_adjustment) 

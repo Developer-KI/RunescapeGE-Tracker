@@ -1,19 +1,17 @@
 import  pandas as pd
 import  numpy as np
 import  matplotlib.pyplot as plt
-import  src.data_ingestion.api_fetcher as fetcher
+import  src.data_ingestion.data_fetcher as fetcher
 import  scipy.stats as stats
-import  os
 from    matplotlib.ticker import MaxNLocator, ScalarFormatter
 import  src.utils.model_tools as tools
-from    src.data_ingestion.data_pipeline import alchemy_preprocess, data_preprocess2 
+from    src.data_processing.data_pipeline import alchemy_preprocess, data_preprocess2 
 from    sklearn.metrics import mean_absolute_error
 from    matplotlib.gridspec import GridSpec
 from    statsmodels.tsa.api import SimpleExpSmoothing
 from    scipy.stats import norm, kurtosis, skew, jarque_bera
 import  pytz
 from    typing import cast
-print(os.getcwd())
 # plt.rcParams.update({
 #     'axes.facecolor': '#2E2E2E',
 #     'axes.titlecolor': 'white',
@@ -226,45 +224,49 @@ def plot_feature_divergence(
     return fig, ax
 
 
-def plot_recent_alch_vs_price(item_id: int) -> None:
+def plot_recent_alch_vs_price(item_id: int, show: bool = False) -> tuple[plt.Figure, plt.Axes]:
     reference = alchemy_preprocess(read=True)
 
     if item_id in reference.index:
+        fig, ax = plt.subplots(figsize=(10, 5))
         df = data_preprocess2()
         df = df.pivot(index="timestamp", columns="item_id", values="wprice")[item_id]
-        plt.figure(figsize=(10, 5))
-        plt.plot(pd.to_datetime(df.index, unit='s'), df.values, marker="o", markersize='2', linestyle="-", label=f"{reference.loc[item_id,'item']} Price")
-        plt.axhline(y=reference.loc[item_id, 'price'], color='cyan', linestyle='-', label='High Alchemy Price')
+        ax.plot(pd.to_datetime(df.index, unit='s'), df.values, marker="o", markersize='2', linestyle="-", label=f"{reference.loc[item_id,'item']} Price")
+        ax.axhline(y=reference.loc[item_id, 'price'], color='cyan', linestyle='-', label='High Alchemy Price')
 
-        plt.xlabel("Time")
-        plt.ylabel("Price")
-        plt.title("Recent Alchemy vs Realized Price")
-        plt.xticks(rotation=45)  
-        plt.legend()
-        plt.grid()
+        ax.set_xlabel("Time")
+        ax.set_ylabel("Price")
+        ax.set_title("Recent Alchemy vs Realized Price")
+        plt.xticks(rotation=45)
+        ax.legend()
+        ax.grid()
 
-        plt.show()
-    else: 
+        if show:
+            plt.show()
+        return fig, ax
+    else:
         raise ValueError("Invalid ID")
     
-def plot_historical_alch_vs_price(item_id: int) -> None:
+def plot_historical_alch_vs_price(item_id: int, show: bool = False) -> tuple[plt.Figure, plt.Axes]:
     reference = alchemy_preprocess(read=True)
 
     if item_id in reference.index:
+        fig, ax = plt.subplots(figsize=(10, 5))
         df = fetcher.fetch_historical(item_id)
-        plt.figure(figsize=(10, 5))
-        plt.plot(pd.to_datetime(df['timestamp'], unit='s'), df['price'], marker="o", markersize='2', linestyle="-", label=f"{reference.loc[item_id,'item']} Price")
-        plt.axhline(y=reference.loc[item_id, 'price'], color='cyan', linestyle='-', label='High Alchemy Price')
+        ax.plot(pd.to_datetime(df['timestamp'], unit='s'), df['price'], marker="o", markersize='2', linestyle="-", label=f"{reference.loc[item_id,'item']} Price")
+        ax.axhline(y=reference.loc[item_id, 'price'], color='cyan', linestyle='-', label='High Alchemy Price')
 
-        plt.xlabel("Time")
-        plt.ylabel("Price")
-        plt.title("Historical Alchemy vs Realized Price")
-        plt.legend()
+        ax.set_xlabel("Time")
+        ax.set_ylabel("Price")
+        ax.set_title("Historical Alchemy vs Realized Price")
+        ax.legend()
         plt.xticks(rotation=45)
-        plt.grid()
+        ax.grid()
 
-        plt.show()
-    else: 
+        if show:
+            plt.show()
+        return fig, ax
+    else:
         raise Exception("Invalid ID")
 
 def plot_classification_vs_price(hist_pricedata,hidden_states,item, model):

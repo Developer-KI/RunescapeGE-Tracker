@@ -1,2 +1,4 @@
 .venv
-/data/raw_item_data.csv
+/data/data.csv
+/data/data_properties.txt
+**/__pycache__

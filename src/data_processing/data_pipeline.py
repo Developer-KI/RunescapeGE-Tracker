@@ -1,8 +1,7 @@
-import  os
-import sys
+from pathlib import Path
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-data_path = os.path.join(current_dir, '..', 'data')
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_ROOT / "data"
 
 import pandas as pd
 import json
@@ -12,7 +11,7 @@ from typing import List
 def data_explicit_preprocess(
     items:          list,
     read_path:      str|None = None,
-    file_path:      str = os.path.join(data_path, 'data.csv'),
+    file_path = DATA_DIR / "data.csv",
     write_name:     str|None = None,
     interp_method:  str = 'linear' 
 ) -> pd.DataFrame:
@@ -101,14 +100,14 @@ def data_explicit_preprocess(
     processed_pricedata = processed_pricedata[final_columns_order]
     
     if type(write_name) is str:
-        processed_pricedata.to_csv(f'../data/{write_name}',mode='w', header=False, index=False)
+        processed_pricedata.to_csv(DATA_DIR / write_name, mode='w', header=False, index=False)
     else: raise ValueError("Argument write_name should be type string or None")
     return processed_pricedata
 
 def data_preprocess2(
-    read:               bool = True, 
-    filepath:           str = data_path, 
-    read_path:          str = os.path.join(data_path, 'processed_data.csv'), 
+    read:               bool = True,
+    filepath = DATA_DIR,
+    read_path = DATA_DIR / "processed_data.csv",
     write:              bool = False, 
     interp_method:      str = 'linear', 
     filter_volume:      bool = True,
@@ -118,9 +117,9 @@ def data_preprocess2(
     if read:
         try:
             df = pd.read_csv(
-                f'{read_path}',
-                names= ['timestamp', 'item_id', 'avgHighPrice', 
-                        'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 
+                read_path,
+                names= ['timestamp', 'item_id', 'avgHighPrice',
+                        'highPriceVolume', 'avgLowPrice', 'lowPriceVolume',
                         'totalvol', 'wprice'
                     ]
             )
@@ -133,21 +132,21 @@ def data_preprocess2(
             print(f"Error reading processed data from {read_path}: {e}. Proceeding with raw data processing.")
             pass
 
-    raw_pricedata = pd.read_csv(f'{filepath}/data.csv', names=['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp'])
-    
+    raw_pricedata = pd.read_csv(filepath / "data.csv", names=['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp'])
+
     raw_pricedata = raw_pricedata.sort_values(by=['item_id', 'timestamp']).reset_index(drop=True)
 
     initial_rows = len(raw_pricedata)
     raw_pricedata.drop_duplicates(subset=['item_id', 'timestamp'], keep='last', inplace=True)
     if len(raw_pricedata) < initial_rows:
         print(f"Removed {initial_rows - len(raw_pricedata)} duplicate (item_id, timestamp) entries from raw data.")
-    
+
     try:
         if filter_volume:
-            with open(f'{filepath}/data_properties.txt', "r") as file:
+            with open(filepath / "data_properties.txt", "r") as file:
                 lines = file.readlines()
         else:
-            with open(f'{filepath}/data_properties_full.txt', "r") as file:
+            with open(filepath / "data_properties_full.txt", "r") as file:
                 lines = file.readlines()
         series_length = int(lines[2].replace("\n", ""))
     except FileNotFoundError:
@@ -216,18 +215,18 @@ def data_preprocess2(
     processed_priced_data = processed_priced_data[final_columns_order]
 
     if write:
-        processed_priced_data.to_csv(f'{filepath}/processed_data.csv', mode='w', header=False, index=False)
-        print(f"Processed data saved to {filepath}/processed_data.csv")
+        processed_priced_data.to_csv(filepath / "processed_data.csv", mode='w', header=False, index=False)
+        print(f"Processed data saved to {filepath / 'processed_data.csv'}")
     
     return processed_priced_data
 
-def data_preprocess_deprecated(read: bool, filepath: str = "./data", read_path: str = "../data/processed_data.csv", write: bool = False, interp_method: str = 'linear') -> pd.DataFrame:
+def data_preprocess_deprecated(read: bool, filepath = DATA_DIR, read_path = DATA_DIR / "processed_data.csv", write: bool = False, interp_method: str = 'linear') -> pd.DataFrame:
     if read:
-        df = pd.read_csv(f'{read_path}', names=['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp', 'totalvol', 'wprice'])
+        df = pd.read_csv(read_path, names=['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp', 'totalvol', 'wprice'])
         return df
 
-    raw_pricedata = pd.read_csv(f'{filepath}/data.csv', names=['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp'])
-    with open(f'{filepath}/data_properties.txt', "r") as file:
+    raw_pricedata = pd.read_csv(filepath / "data.csv", names=['item_id', 'avgHighPrice', 'highPriceVolume', 'avgLowPrice', 'lowPriceVolume', 'timestamp'])
+    with open(filepath / "data_properties.txt", "r") as file:
         lines = file.readlines()
         file.close()
     series_length = int(lines[1].replace("\n", ""))
@@ -244,20 +243,20 @@ def data_preprocess_deprecated(read: bool, filepath: str = "./data", read_path: 
 
     #Saving output
     if write:
-        processed_priced_data.to_csv(f'{filepath}/processed_data.csv', mode='w', header=False, index=False)
-    
+        processed_priced_data.to_csv(filepath / "processed_data.csv", mode='w', header=False, index=False)
+
     return processed_priced_data
 
-def alchemy_preprocess(read: bool = True, filepath: str = data_path, read_path: str = f'{data_path}/alchemy_data.csv', write: bool = False) -> pd.DataFrame:
+def alchemy_preprocess(read: bool = True, filepath = DATA_DIR, read_path = DATA_DIR / "alchemy_data.csv", write: bool = False) -> pd.DataFrame:
     ### Read has higher priority than write
     if read:
-        df = pd.read_csv(f'{read_path}', names=['item', 'price'], index_col=0)
+        df = pd.read_csv(read_path, names=['item', 'price'], index_col=0)
         return df
 
-    with open(f'{filepath}/namealchemy.json', "r") as file:
+    with open(filepath / "namealchemy.json", "r") as file:
         alc_data = json.load(file)
         file.close()
-    with open(f'{filepath}/nameID.json', "r") as file:
+    with open(filepath / "nameID.json", "r") as file:
         name_data = json.load(file)
         file.close()
 
@@ -271,7 +270,7 @@ def alchemy_preprocess(read: bool = True, filepath: str = data_path, read_path: 
 
     #Saving output
     if write:
-        reference.to_csv(f'{filepath}/alchemy_data.csv', mode='w', header=False, index=True)
+        reference.to_csv(filepath / "alchemy_data.csv", mode='w', header=False, index=True)
 
     return reference
 

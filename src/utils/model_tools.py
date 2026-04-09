@@ -1,10 +1,7 @@
-import  os
-import sys
-# Get the directory of the current script (which is 'utils')
-current_dir = os.path.dirname(os.path.abspath(__file__))
+from pathlib import Path
 
-# Construct the full path to the JSON file
-json_path = os.path.join(current_dir, '..', 'data', 'nameID.json')
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_ROOT / "data"
 
 import  pandas as pd
 import  numpy as np
@@ -40,7 +37,7 @@ plt.rcParams.update({
 
 })
 
-with open(json_path, 'r') as file:
+with open(DATA_DIR / "nameID.json", 'r') as file:
     name_to_id: Dict[str, int] = json.load(file)
 
 id_to_name: Dict[int, str] = {value: key for key, value in name_to_id.items()}
