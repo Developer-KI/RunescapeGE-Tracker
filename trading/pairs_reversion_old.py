@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
-from pykalman import KalmanFilter
 
 import src.utils.model_tools as tools
 import src.utils.plot_tools as myplot
@@ -73,44 +72,28 @@ class CointegratedGroupReversion(Strategy):
         Hard stop-loss z-score (spread moves further against us).
     capital_pct : float
         Fraction of portfolio equity to deploy when entering a trade.
-    use_kalman : bool
-        If True, estimate the spread's equilibrium level with a Kalman
-        filter (local-level / random-walk state) instead of a rolling
-        simple mean. The rolling window is still used for the std.
-    kalman_obs_cov : float
-        Observation noise variance for the Kalman filter. Larger values
-        make the filtered level smoother / less reactive.
-    kalman_trans_cov : float
-        Transition (process) noise variance. Larger values let the level
-        drift more quickly.
     """
 
     def __init__(
         self,
-        items:            list[int],
-        coint_vector:     np.ndarray,
-        z_window:         int   = 288,     # 1 day of 5-min bars
-        entry_z:          float = -2.0,
-        exit_z:           float = -0.2,
-        stop_z:           float = -3.5,
-        capital_pct:      float = 0.9,
-        use_kalman:       bool  = True,
-        kalman_obs_cov:   float = 1.0,
-        kalman_trans_cov: float = 1e-4,
+        items:         list[int],
+        coint_vector:  np.ndarray,
+        z_window:      int   = 288,     # 1 day of 5-min bars
+        entry_z:       float = -2.0,
+        exit_z:        float = -0.2,
+        stop_z:        float = -3.5,
+        capital_pct:   float = 0.9,
     ):
         if len(items) != len(coint_vector):
             raise ValueError("items and coint_vector must have the same length")
 
-        self.items            = list(items)
-        self.coint_vector     = np.asarray(coint_vector, dtype=float)
-        self.z_window         = z_window
-        self.entry_z          = entry_z
-        self.exit_z           = exit_z
-        self.stop_z           = stop_z
-        self.capital_pct      = capital_pct
-        self.use_kalman       = use_kalman
-        self.kalman_obs_cov   = kalman_obs_cov
-        self.kalman_trans_cov = kalman_trans_cov
+        self.items        = list(items)
+        self.coint_vector = np.asarray(coint_vector, dtype=float)
+        self.z_window     = z_window
+        self.entry_z      = entry_z
+        self.exit_z       = exit_z
+        self.stop_z       = stop_z
+        self.capital_pct  = capital_pct
 
         # Normalised positive weights used for capital allocation on entry.
         # If the leading eigenvector happens to have mostly negative loadings,
@@ -143,30 +126,8 @@ class CointegratedGroupReversion(Strategy):
         spread = group_prices.values @ self.coint_vector
         self._spread = pd.Series(spread, index=price_matrix.index, name='spread')
 
-        if self.use_kalman:
-            # Local-level Kalman filter: the equilibrium spread is modeled
-            # as a random walk, so the filtered state tracks a slowly
-            # drifting mean instead of the fixed-window SMA.
-            kf = KalmanFilter(
-                transition_matrices    = [1.0],
-                observation_matrices   = [1.0],
-                initial_state_mean     = float(self._spread.iloc[0]),
-                initial_state_covariance = 1.0,
-                observation_covariance = self.kalman_obs_cov,
-                transition_covariance  = self.kalman_trans_cov,
-            )
-            state_means, _ = kf.filter(self._spread.values)
-            self._spread_mean = pd.Series(
-                state_means.flatten(), index=self._spread.index, name='spread_mean'
-            )
-        else:
-            self._spread_mean = self._spread.rolling(self.z_window).mean()
-
-        # Residual std (spread minus its filtered/rolling level) over the
-        # same rolling window — this scales the z-score consistently in
-        # both modes.
-        residual = self._spread - self._spread_mean
-        self._spread_std = residual.rolling(self.z_window).std()
+        self._spread_mean = self._spread.rolling(self.z_window).mean()
+        self._spread_std  = self._spread.rolling(self.z_window).std()
 
     def next(self, idx: int, row: pd.Series, portfolio: Portfolio,
              price_matrix: pd.DataFrame, vol_matrix: pd.DataFrame) -> dict[int, tuple[Signal, int]]:
@@ -334,13 +295,13 @@ if __name__ == "__main__":
 
     # Equity curve + drawdown
     result.plot(show=False)
-    plt.gcf().savefig(OUTPUT_DIR / "pairs_reversion_equity.png",
+    plt.gcf().savefig(OUTPUT_DIR / "pairs_reversion_equity_old.png",
                       dpi=150, facecolor='#000000')
     plt.close(plt.gcf())
 
     # Trades on the first leg
     fig_trades, _ = result.plot_trades(items_used[0], show=False)
-    fig_trades.savefig(OUTPUT_DIR / "pairs_reversion_trades.png",
+    fig_trades.savefig(OUTPUT_DIR / "pairs_reversion_trades_old.png",
                        dpi=150, facecolor='#000000')
     plt.close(fig_trades)
 
@@ -361,7 +322,7 @@ if __name__ == "__main__":
     ax.grid()
     ax.legend()
     plt.xticks(rotation=45)
-    fig_z.savefig(OUTPUT_DIR / "pairs_reversion_spread_zscore.png",
+    fig_z.savefig(OUTPUT_DIR / "pairs_reversion_spread_zscore_old.png",
                   dpi=150, facecolor='#000000', bbox_inches='tight')
     plt.close(fig_z)
 
