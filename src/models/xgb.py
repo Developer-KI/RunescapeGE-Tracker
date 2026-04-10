@@ -73,12 +73,17 @@ def _train_xgb_model(
             outliers_set.update(y_train_outliers.index)
             outliers_set.update(y_test_outliers.index)
 
-        
-        # Filter both X and y based on the outliers found in y
-        x_train_cv_filtered = x_train_cv[~np.isin(np.arange(len(y_train_cv)), y_train_outliers.index)]
-        y_train_cv_filtered = y_train_cv[~np.isin(np.arange(len(y_train_cv)), y_train_outliers.index)]
-        x_test_cv_filtered = x_test_cv[~np.isin(np.arange(len(y_test_cv)), y_test_outliers.index)]
-        y_test_cv_filtered = y_test_cv[~np.isin(np.arange(len(y_test_cv)), y_test_outliers.index)]
+
+            # Filter both X and y based on the outliers found in y
+            x_train_cv_filtered = x_train_cv[~x_train_cv.index.isin(y_train_outliers.index)]
+            y_train_cv_filtered = y_train_cv[~y_train_cv.index.isin(y_train_outliers.index)]
+            x_test_cv_filtered = x_test_cv[~x_test_cv.index.isin(y_test_outliers.index)]
+            y_test_cv_filtered = y_test_cv[~y_test_cv.index.isin(y_test_outliers.index)]
+        else:
+            x_train_cv_filtered = x_train_cv
+            y_train_cv_filtered = y_train_cv
+            x_test_cv_filtered = x_test_cv
+            y_test_cv_filtered = y_test_cv
 
         model_cv = XGBRegressor(
             n_estimators=n_estimators, 
@@ -211,7 +216,7 @@ def XGB(
     print(f"Final Holdout Directional Accuracy: {final_holdout_da:.2f}%")
     if detection is not None and isinstance(detection,str):
         return best_model, holdout_preds, train_outliers_idx, holdout_outliers_idx, cv_mae, cv_mase, train_cv_mae, train_cv_mase
-    else: return best_model, holdout_preds, cv_mae, cv_mase, train_cv_mae, train_cv_mase
+    else: return best_model, holdout_preds, None, None, cv_mae, cv_mase, train_cv_mae, train_cv_mase
 
 def XGBOptim(
     data:pd.DataFrame,
@@ -239,16 +244,16 @@ def XGBOptim(
             y_train_cv, y_test_cv = Y[train_idx], Y[test_idx]
 
             model = XGBRegressor(
-                n_estimators=trial.suggest_int("n_estimators", 20, 400), #50,200
+                n_estimators=trial.suggest_int("n_estimators", 20, 400),
                 max_depth=trial.suggest_int("max_depth", 2, 50),
-                eta=trial.suggest_int('eta',0.001,1),
-                subsample=trial.suggest_int("subsample", 0, 1),
-                colsample_bytree=trial.suggest_int("subsample", 0, 1)
+                eta=trial.suggest_float('eta', 0.001, 1.0, log=True),
+                subsample=trial.suggest_float("subsample", 0.1, 1.0),
+                colsample_bytree=trial.suggest_float("colsample_bytree", 0.1, 1.0)
                 )
 
             model.fit(X_train_cv, y_train_cv)
             preds_cv = model.predict(X_test_cv)
-            mase = tools.mase(y_test_cv, preds_cv,y_train_cv,1)
+            mase = tools.mase(y_test_cv, y_train_cv, preds_cv, 1)
             mase_scores.append(mase)
             # trial.report(mean(mase_scores), step=len(mase_scores))  # Log progress
             # if pruner==True:

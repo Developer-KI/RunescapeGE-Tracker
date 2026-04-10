@@ -73,10 +73,10 @@ def _train_rfts_model(
             outliers_set.update(y_test_outliers.index)
 
             # Filter both X and y based on the outliers found in y
-            x_train_cv_filtered = x_train_cv[~np.isin(np.arange(len(y_train_cv)), y_train_outliers.index)]
-            y_train_cv_filtered = y_train_cv[~np.isin(np.arange(len(y_train_cv)), y_train_outliers.index)]
-            x_test_cv_filtered = x_test_cv[~np.isin(np.arange(len(y_test_cv)), y_test_outliers.index)]
-            y_test_cv_filtered = y_test_cv[~np.isin(np.arange(len(y_test_cv)), y_test_outliers.index)]
+            x_train_cv_filtered = x_train_cv[~x_train_cv.index.isin(y_train_outliers.index)]
+            y_train_cv_filtered = y_train_cv[~y_train_cv.index.isin(y_train_outliers.index)]
+            x_test_cv_filtered = x_test_cv[~x_test_cv.index.isin(y_test_outliers.index)]
+            y_test_cv_filtered = y_test_cv[~y_test_cv.index.isin(y_test_outliers.index)]
         else:
             x_train_cv_filtered = x_train_cv
             y_train_cv_filtered = y_train_cv
@@ -215,8 +215,8 @@ def RFTS(
     else: return best_model, holdout_preds, None, None, cv_mae, cv_mase, train_cv_mae, train_cv_mase
         
 def RFTSOptim(data:pd.DataFrame,target_col:str, holdout:int,n_trials:int=30,pruner:bool=True,meta_weight=False)-> tuple:
-    X = data.drop(target_col, axis=1).iloc[:-holdout].to_numpy(dtype="float32")
-    Y = data[target_col].iloc[:-holdout].to_numpy(dtype="float32")
+    X = data.drop(target_col, axis=1).iloc[:-holdout]
+    Y = data[target_col].iloc[:-holdout]
 
     def objective(trial) -> float:
         if meta_weight==True:
@@ -228,8 +228,8 @@ def RFTSOptim(data:pd.DataFrame,target_col:str, holdout:int,n_trials:int=30,prun
         best_test_idx=None
         for train_idx, test_idx in tscv.split(X):
             
-            X_train_cv, X_test_cv = X[train_idx], X[test_idx]
-            y_train_cv, y_test_cv = Y[train_idx], Y[test_idx]
+            X_train_cv, X_test_cv = X.iloc[train_idx], X.iloc[test_idx]
+            y_train_cv, y_test_cv = Y.iloc[train_idx], Y.iloc[test_idx]
 
             model = RandomForestRegressor(
                 n_estimators=trial.suggest_int("n_estimators", 20, 400), #50,200

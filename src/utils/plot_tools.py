@@ -70,7 +70,6 @@ def plot_features(
 ) -> tuple[plt.Figure, plt.Axes]: # Explicitly return the plot objects
     
     fig, ax = plt.subplots(figsize=(10, 5))
-    y_slice = y.loc[start:end]
 
     if x is None and y is None:
         raise ValueError("Input x or y data")
@@ -217,7 +216,8 @@ def plot_feature_divergence(
     else: raise ValueError('Select a valid divergence type')
     daytime_shade(feature1_slice)
     ax.grid()
-    ax.ticklabel_format(style='plain', useOffset=False)
+    ax.yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
+    ax.yaxis.get_major_formatter().set_scientific(False)
     plt.xticks(rotation=45)
     if show:
         plt.show()
@@ -268,6 +268,54 @@ def plot_historical_alch_vs_price(item_id: int, show: bool = False) -> tuple[plt
         return fig, ax
     else:
         raise Exception("Invalid ID")
+
+def plot_acf(
+    series:     pd.Series,
+    lags:       range | list | None = None,
+    alpha:      float = 0.05,
+    title:      str | object = _DEFAULT_TITLE,
+    show:       bool = False
+) -> tuple[plt.Figure, plt.Axes]:
+
+    series = series.dropna()
+    n = len(series)
+    mean = series.mean()
+
+    if lags is None:
+        lags = range(40)
+    lags = list(lags)
+
+    acf_values = []
+    denom = np.sum((series - mean) ** 2)
+    for lag in lags:
+        if lag == 0:
+            acf_values.append(1.0)
+        else:
+            numer = np.sum((series.values[lag:] - mean) * (series.values[:-lag] - mean))
+            acf_values.append(numer / denom)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.bar(lags, acf_values, width=0.3, color='skyblue', edgecolor='white', linewidth=0.5)
+    ax.axhline(0, color='white', linewidth=0.8)
+
+    z = norm.ppf(1 - alpha / 2)
+    ci = z / np.sqrt(n)
+    ax.axhline(ci, color='red', linestyle='--', linewidth=1, label=f'{(1 - alpha)*100:.0f}% CI')
+    ax.axhline(-ci, color='red', linestyle='--', linewidth=1)
+    ax.fill_between(lags, -ci, ci, color='red', alpha=0.08)
+
+    title_to_use: str = "Autocorrelation Function (ACF)" if title is _DEFAULT_TITLE else cast(str, title)
+    ax.set_title(title_to_use)
+    ax.set_xlabel("Lag")
+    ax.set_ylabel("Autocorrelation")
+    ax.grid(axis='y', linestyle='--', alpha=0.5)
+
+    ax.legend()
+    if show:
+        plt.show()
+
+    return fig, ax
+
 
 def plot_classification_vs_price(hist_pricedata,hidden_states,item, model):
     timescale = hist_pricedata.index
@@ -331,7 +379,7 @@ def plot_pred_vs_price(data: pd.DataFrame, predictions: np.ndarray, holdout_pred
     
     training_test_time_indices = adj_index[:training_test_plot_end_idx]
     holdout_time_indices = adj_index[training_test_plot_end_idx:]
-    holdout_predictions = predictions[:-holdout_pred_n]
+    holdout_predictions = predictions[-holdout_pred_n:]
 
     pred_std = np.std(holdout_predictions)  
     upper_bound = holdout_predictions + std_factor * pred_std

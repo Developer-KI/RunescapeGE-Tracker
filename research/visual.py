@@ -37,8 +37,7 @@ vol_matrix_items = vol_matrix_items.iloc[1000:30000]
 
 equal_index, vprice_index = get.market_indices(price_matrix_items, vol_matrix_items)
 _, boss_matrix_items, boss_vol_matrix_items = get.boss_data()
-# %%
-#Price and Volume Time series
+# %% Price and Volume Time series
 totalvolume_time = vol_matrix_items.iloc[:,1:].sum(axis=1)
 
 item1 = np.random.choice(price_matrix_items.columns)

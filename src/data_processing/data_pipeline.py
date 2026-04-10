@@ -10,12 +10,12 @@ from typing import List
 
 def data_explicit_preprocess(
     items:          list,
-    read_path:      str|None = None,
+    read_path:      Path|str|None = None,
     file_path = DATA_DIR / "data.csv",
     write_name:     str|None = None,
     interp_method:  str = 'linear' 
 ) -> pd.DataFrame:
-    if type(read_path) is str:
+    if type(read_path) is str or Path:
         preprocessed_pricedata = pd.read_csv(
                 read_path, 
                 names = [

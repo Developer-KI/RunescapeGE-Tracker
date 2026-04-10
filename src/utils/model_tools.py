@@ -185,7 +185,8 @@ def mase(y_true:    pd.Series|np.ndarray,
          m:         int=1
         ) -> float:
     
-    naive_errors = np.abs(y_train[m:].values-y_train[:-m].values)
+    y_train_arr = np.asarray(y_train)
+    naive_errors = np.abs(y_train_arr[m:] - y_train_arr[:-m])
     naive_mae = (naive_errors).mean()
     # Model forecast error
     mae_model = np.abs(y_true - y_pred).mean()
@@ -201,8 +202,9 @@ def calculate_returns(price_series: pd.Series|pd.DataFrame, return_periods: str|
     """
     #induces an aggregation distortion
 
-    ratio = price_series/price_series.shift(1).dropna()
-    raw_return = ratio -1
+    ratio = price_series / price_series.shift(1)
+    ratio = ratio.dropna()
+    raw_return = ratio - 1
 
     if return_periods is None or return_periods.lower() == '5m':
         return raw_return
@@ -271,7 +273,7 @@ def create_item_index(data: pd.DataFrame|list, items:list[int], type:str, base_v
         items = items_to_keep
     
     if type == 'equal':
-        if data is list:
+        if isinstance(data, list):
             raise ValueError("data should be a single DataFrame")
         price_matrix = data
         selection_price = price_matrix[items]
@@ -282,7 +284,7 @@ def create_item_index(data: pd.DataFrame|list, items:list[int], type:str, base_v
         index_equal_weight = mean_ratio * base_value
         return index_equal_weight
     elif type == 'vprice':
-        if data is pd.DataFrame:
+        if isinstance(data, pd.DataFrame):
             raise ValueError("vprice indicies must include a list of price and volume matrix DataFrames")
         price_matrix = data[0]
         selection_price = price_matrix[items]
@@ -319,9 +321,9 @@ def rsi(price_data: pd.Series, periods: int) -> pd.Series:
     return rsi
 
 def volatility_market(price_data: pd.DataFrame, aggregation: str|None = None, smoothing: int = 20) -> pd.Series:
-    #Aggregate volatility
-    volatility_items = calculate_returns(price_data, aggregation)
-    volatility_items = price_data.rolling(window=smoothing).std().dropna()
+    #Aggregate volatility from returns
+    returns = calculate_returns(price_data, aggregation)
+    volatility_items = returns.rolling(window=smoothing).std().dropna()
     volatility_sum = volatility_items.sum(axis=1)
     #Scaling
     volatility_market = volatility_sum/price_data.shape[1]

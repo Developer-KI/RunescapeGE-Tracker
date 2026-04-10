@@ -93,22 +93,32 @@ xgb_model, holdout_pred_xgb, train_outliers_xgb, holdout_outliers_xgb, cv_mae_xg
     colsample_bytree=   0.8,
     min_child_weight=   5,
     )
-predictions_xgb = rfts_model.predict(master.drop(f'{target_item}', axis=1))
-myplot.plot_pred_vs_price(master, predictions=predictions_xgb, holdout_pred_n=holdout, lookback=5000,holdout_pred=holdout_pred_xgb, fill_outliers=train_outliers_xgb+holdout_outliers_xgb)
+predictions_xgb = xgb_model.predict(master.drop(f'{target_item}', axis=1))
+myplot.plot_pred_vs_price(master, predictions=predictions_xgb, holdout_pred_n=holdout, lookback=5000, fill_outliers=train_outliers_xgb+holdout_outliers_xgb)
 feature_importances = pd.Series(xgb_model.feature_importances_, index=master.columns[1:]).sort_values(ascending=False)
 print(feature_importances)
-#%% Run an EXPS model **possible axis issue? (disappeared)
-EXPSmodel, pred_exps = myEXPS.EXPSmooth(master,holdout=200) #omitting extreme_exps, outlier_exps
-myplot.plot_pred_vs_price(master,model=EXPSmodel,lookback=1000,holdout_pred=pred_exps)
+#%% Run an EXPS model
+exps_holdout = 200
+exps_training_size = master.shape[0] - exps_holdout
+EXPSmodel, pred_exps = myEXPS.EXPSmooth(master.copy(), holdout=exps_training_size, predictions=exps_holdout)
+actual_holdout_exps = master.iloc[-exps_holdout:, 0]
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.plot(range(exps_holdout), actual_holdout_exps.values, label='Actual', color='white')
+ax.plot(range(exps_holdout), pred_exps.values, label='EXPS Forecast', color='red')
+ax.legend()
+ax.set_title(f'{item_name(target_item)} [{target_item}] Exponential Smoothing: Forecast vs Actual')
+ax.grid()
+plt.show()
 #%% Run the optimized RFTS
-optim, optimparam,best_test_idx = myRFTS.RFTSOptim(master,target_col=f'{target_item}',n_trials=50, holdout=500)
+optim, optimparam,best_test_idx = myRFTS.RFTSOptim(master,target_col=f'{target_item}',n_trials=5, holdout=500)
 #%%
-myplot.plot_pred_vs_price(master, model=optim,best_index=best_test_idx,lookback=0)
+predictions_optim = optim.predict(master.drop(f'{target_item}', axis=1))
+myplot.plot_pred_vs_price(master, predictions=predictions_optim, holdout_pred_n=holdout, lookback=0)
 #%%
 myplot.test_train_error(master, param='max_depth', 
                        exclude_param={}, 
                        model_class=myRFTS.RandomForestRegressor,
-                       param_range=())
+                       param_range=(1, 10))
 # %%
 plt.figure(figsize=(10,5))
 plt.plot(range(len(cv_mae_rfts)),cv_mae_rfts, label='Test')

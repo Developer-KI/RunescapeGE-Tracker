@@ -1,4 +1,3 @@
 .venv
-/data/data.csv
-/data/data_properties.txt
+**/data
 **/__pycache__

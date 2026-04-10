@@ -1,4 +1,35 @@
-from src.utils.model_tools import item_name
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = PROJECT_ROOT / "data"
+
+import numpy as np
+from typing import Dict
+import json
+
+with open(DATA_DIR / "nameID.json", 'r') as file:
+    name_to_id: Dict[str, int] = json.load(file)
+
+id_to_name: Dict[int, str] = {value: key for key, value in name_to_id.items()}
+
+def item_name(query: int|np.integer|str) -> str|int:
+    """
+    Performs a fast, bi-directional lookup using pre-built dictionaries.
+    """
+    if isinstance(query, (int, np.integer)):
+        # Use .get() with an f-string for concise error handling
+        result = id_to_name.get(query)
+        if result is None:
+            raise ValueError(f"ID '{query}' not found.")
+        return result
+    
+    elif isinstance(query, str):
+        result = name_to_id.get(query)
+        if result is None:
+            raise ValueError(f"Name '{query}' not found.")
+        return result
+    else:
+        raise ValueError("Input must be integer ID or string name")
 
 alchemical_hydra = [
 item_name("Hydra tail"),
