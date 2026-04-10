@@ -5,6 +5,17 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+OUTPUT_DIR = Path(__file__).resolve().parent / "output"
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+def save_fig(name: str, fig=None) -> None:
+    """Save the given figure (or the current one) to OUTPUT_DIR as PNG."""
+    import matplotlib.pyplot as _plt
+    if fig is None:
+        fig = _plt.gcf()
+    fig.savefig(OUTPUT_DIR / f"{name}.png", dpi=150,
+                facecolor='#000000', bbox_inches='tight')
+
 
 import  pandas as pd, numpy as np
 from    matplotlib import pyplot as plt
@@ -146,6 +157,7 @@ spread = group_data.values @ coint_vector
 spread_series = pd.Series(spread, index=group_data.index, name=f'{target_group} Spread')
 
 myplot.plot_features(spread_series, title=f'{target_group} Cointegrating Spread (Eigenvector 1)')
+save_fig("cointegration_dharok_spread")
 #%%
 window = 200
 spread_mean = spread_series.rolling(window).mean()
@@ -153,11 +165,13 @@ spread_std = spread_series.rolling(window).std()
 spread_z = ((spread_series - spread_mean) / spread_std).dropna()
 spread_z.name = f'{target_group} Spread Z-Score'
 
+
 fig, ax = myplot.plot_features(spread_z, title=f'{target_group} Spread Z-Score (window={window})')
 ax.axhline(y=2, color='red', linestyle='--', alpha=0.5, label='+2 SD')
 ax.axhline(y=-2, color='green', linestyle='--', alpha=0.5, label='-2 SD')
 ax.axhline(y=0, color='white', linestyle='-', alpha=0.3)
 ax.legend()
+save_fig("cointegration_dharok_zscore", fig=fig)
 #%%
 for group_name, r in results.items():
     if r['n_coint_95'] > 0:
@@ -168,9 +182,4 @@ for group_name, r in results.items():
 
         spread_outliers = outlier.ewm_z_residuals(spread_series, 100, 3, 3)
         spread_filtered = spread_series.drop(spread_outliers.index)
-
-        item_labels = ', '.join([str(item_name(i)) for i in r['items'][:3]])
-        if len(r['items']) > 3:
-            item_labels += '...'
-        myplot.plot_features(spread_filtered, title=f'{group_name} Coint. Spread ({r["n_coint_95"]} relations at 95%)\n{item_labels}')
 # %%

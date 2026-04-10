@@ -8,3 +8,4 @@ scipy
 optuna
 factor_analyzer
 networkx
+arch

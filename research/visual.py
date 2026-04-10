@@ -10,6 +10,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 DATA_DIR = PROJECT_ROOT / "data"
+OUTPUT_DIR = Path(__file__).resolve().parent / "output"
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+def save_fig(name: str, fig=None) -> None:
+    """Save the given figure (or the current one) to OUTPUT_DIR as PNG."""
+    if fig is None:
+        fig = plt.gcf()
+    fig.savefig(OUTPUT_DIR / f"{name}.png", dpi=150,
+                facecolor='#000000', bbox_inches='tight')
+
 from   src.utils.model_tools import item_name, volatility_market
 import src.utils.plot_tools as myplot
 from   scipy.stats import norm, t, kurtosis, skew, jarque_bera, probplot, skewtest
@@ -48,15 +58,17 @@ start = 20
 market_volatility = volatility_market(price_matrix_items, smoothing=start, aggregation="h")
 #%% Market Volatility Plot
 myplot.plot_features(market_volatility, title=fr"OSRS $\mathbf{{{round((market_volatility.shape[0]*5)/(60*24),1)}}}$ Day Market Volatility", ylab="Standard Deviation (SD)")
-#%% Item Volatility 
+save_fig("market_volatility")
+#%% Item Volatility
 smoothing = 5
 item_price= price_matrix_items[item]
 returns = tools.calculate_returns(item_price,"h")
 log_returns = np.log(1+returns)
-returns_volatility = returns.rolling(smoothing).std().dropna() 
-log_returns_volatility = log_returns.rolling(smoothing).std().dropna() 
+returns_volatility = returns.rolling(smoothing).std().dropna()
+log_returns_volatility = log_returns.rolling(smoothing).std().dropna()
 #%%
 myplot.plot_features(log_returns_volatility, ylab='Standard Deviations (GP)', title=fr'$\mathbf{{{item_name(item)}}}$ [{item}] Volatility')
+save_fig(f"item_volatility_{item}")
 #%% Leverage Effect (Returns vs Volatility)
 plt.figure(figsize=(10,5))
 plt.title(fr'$\mathbf{{{item_name(item)}}}$ [{item}] Log Return Volatility vs. Log Returns')
@@ -64,17 +76,22 @@ plt.scatter(returns_volatility, returns[smoothing-1:], alpha=0.5, color='skyblue
 plt.xlabel('Market Volatility')
 plt.ylabel('Log Returns')
 plt.grid()
+save_fig(f"leverage_effect_{item}")
 plt.show()
 
-#%% Total Volume Plot 
+#%% Total Volume Plot
 myplot.plot_features(totalvolume_time, ylab="Volume of Market Trade", title=fr"$\mathbf{{{round((market_volatility.shape[0]*5)/(60*24),1)}}}$ Day Market Volume of the $\mathbf{{{vol_matrix_items.shape[1]}}}$ Most Traded Items")
+save_fig("total_volume")
 #%% Item Volume
 myplot.plot_features(vol_matrix_items[item], ylab='Volume',title=fr"$\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{round((market_volatility.shape[0]*5)/(60*24),1)}}}$ Day Market Volume")
+save_fig(f"item_volume_{item}")
 
 #%% Item Price vs Alchemy Price Plot
 
 myplot.plot_historical_alch_vs_price(np.random.choice(price_matrix_items.columns))
+save_fig("alch_vs_price_historical")
 myplot.plot_recent_alch_vs_price(np.random.choice(price_matrix_items.columns))
+save_fig("alch_vs_price_recent")
 #%%
 lower_bound = np.percentile(log_returns, 0.1)
 upper_bound = np.percentile(log_returns, 99.9)
@@ -117,8 +134,9 @@ ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=10,
         verticalalignment='top', horizontalalignment='left', bbox=props)
 
 plt.legend()
+save_fig(f"log_return_distribution_{item}")
 plt.show()
- 
+
 #%% QQ Plot Normal
 plt.figure(figsize=(10,5))
 out=probplot(log_returns, dist="norm", fit=True, rvalue=True, plot=plt)
@@ -130,6 +148,7 @@ plt.title(fr'QQ Plot: $\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{return_
 plt.ylabel('Sample Quantiles')
 plt.xlabel('Theoretical Quantiles')
 plt.grid()
+save_fig(f"qq_normal_{item}")
 plt.show()
 
 #%% QQ Plot t
@@ -143,26 +162,38 @@ plt.title(fr'QQ Plot: $\mathbf{{{item_name(item)}}}$ [{item}] $\mathbf{{{return_
 plt.ylabel('Sample Quantiles')
 plt.xlabel('Theoretical Quantiles')
 plt.grid()
+save_fig(f"qq_studentT_{item}")
 plt.show()
 # %%
 myplot.plot_features(price_matrix_items[item1],start= '2025-05-10',end= '2025-05-11')
+save_fig(f"item_price_slice_{item1}")
 #%% Market Indices
 myplot.plot_features(equal_index)
+save_fig("market_index_equal")
 #%%
 myplot.plot_features(equal_index)
-# %% Volume History 
+save_fig("market_index_equal_2")
+# %% Volume History
 myplot.plot_features(vol_matrix_items[item1],start= '2025-05-10',end= '2025-05-11')
+save_fig(f"item_volume_slice_{item1}")
 # %% Correlations
+plt.figure(figsize=(10, 8))
 sns.heatmap(price_matrix_items.iloc[:,1:10].corr(), annot=True, cmap='coolwarm', fmt=".2f")
+save_fig("price_correlation_heatmap")
 #%%
+plt.figure(figsize=(10, 8))
 sns.heatmap(vol_matrix_items.iloc[:,15:30].corr(), annot=True, cmap='coolwarm', fmt=".2f")
+save_fig("volume_correlation_heatmap")
 #%% Item Beta
 myplot.plot_item_market_divergence(price_matrix_items, item1, vprice_index)
+save_fig(f"item_market_divergence_vprice_{item1}")
 #%%
 myplot.plot_item_market_divergence(price_matrix_items, item1, equal_index)
+save_fig(f"item_market_divergence_equal_{item1}")
 print(f'Beta: {tools.beta(price_matrix_items, item1, equal_index)}')
 #%% Pair Divergence
 myplot.plot_feature_divergence(price_matrix_items[item1], price_matrix_items[item2], 'z', window=60,start= '2025-05-10',end= '2025-05-11')
+save_fig(f"pair_divergence_{item1}_{item2}")
 #%%
 high_value_items = price_matrix_items.loc[:,price_matrix_items.mean()>300]
 high_value_volume = vol_matrix_items.loc[:,price_matrix_items.mean()>300]
@@ -219,6 +250,7 @@ ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=10,
         verticalalignment='top', horizontalalignment='left', bbox=props)
 
 plt.legend()
+save_fig("market_log_return_distribution_5m")
 plt.show()
 # %% --------------------------------------
 
@@ -242,6 +274,7 @@ plt.figure(figsize=(10, 5))
 myplot.plot_acf(alt_log_returns_hour, lags=range(20), alpha=0.05)
 plt.ylim(-0.50,0.25)
 plt.title("Market Return Autocorrelation")
+save_fig("market_return_acf_hourly")
 plt.show()
 #%% Spectral analysis
 price_matrix_returns = price_matrix_items.pct_change()
@@ -288,6 +321,7 @@ plt.plot(evalues_sort, 'o-', markersize=4)
 plt.title("Market Spectrum: Signal vs. Noise (Optimized)")
 plt.xlim(-1,100)
 plt.legend()
+save_fig("market_spectrum_signal_vs_noise_5m")
 plt.show()
 
 # %% rotation
@@ -334,15 +368,16 @@ plt.figure(figsize=(12, 12))
 
 #k = spacing
 pos = nx.spring_layout(G, k=1, iterations=50)
-nx.draw(G, pos, 
-        with_labels=True, 
-        edge_color=edge_colors, 
-        node_color='lightblue', 
+nx.draw(G, pos,
+        with_labels=True,
+        edge_color=edge_colors,
+        node_color='lightblue',
         node_size=500,
         font_size=8,
-        width=[G[u][v]['weight'] * 0.5 for u, v in G.edges()]) 
+        width=[G[u][v]['weight'] * 0.5 for u, v in G.edges()])
 
 plt.title("OSRS Market Factor Network (Top 10 Factors)")
+save_fig("factor_network_5m_full")
 plt.show()
 #%%
 G_clean = G.copy()
@@ -357,14 +392,16 @@ for u, v, data in G_clean.edges(data=True):
     else:
         edge_colors_clean.append('crimson')
 G_clean.remove_nodes_from(list(nx.isolates(G_clean)))
-nx.draw(G_clean, pos, 
-        with_labels=True, 
-        edge_color=edge_colors_clean, 
-        node_color='lightblue', 
+plt.figure(figsize=(12, 12))
+nx.draw(G_clean, pos,
+        with_labels=True,
+        edge_color=edge_colors_clean,
+        node_color='lightblue',
         node_size=500,
         font_size=8,
         width=[G[u][v]['weight'] * 0.5 for u, v in G.edges()])
 plt.title("OSRS Market Factor Network (Top 10 Factors)")
+save_fig("factor_network_5m_clean")
 plt.show()
 
 #%% aggregated data, repeated
@@ -425,6 +462,7 @@ props = dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.6)
 ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=10,
         verticalalignment='top', horizontalalignment='left', bbox=props)
 plt.legend()
+save_fig("daily_market_log_return_distribution")
 plt.show()
 # %%
 daily_market_index_full = tools.create_item_index(
@@ -468,6 +506,7 @@ plt.xlabel("Factor Number")
 plt.xlim(-1,100)
 plt.ylabel("Eigenvalue")
 plt.grid(True, which="both", ls="-", alpha=0.5)
+save_fig("market_spectrum_signal_vs_noise_daily_robust")
 plt.show()
 # %% rotation
 keep = 5
@@ -513,15 +552,16 @@ plt.figure(figsize=(12, 12))
 
 #k = spacing
 pos = nx.spring_layout(G, k=1, iterations=50)
-nx.draw(G, pos, 
-        with_labels=True, 
-        edge_color=edge_colors, 
-        node_color='lightblue', 
+nx.draw(G, pos,
+        with_labels=True,
+        edge_color=edge_colors,
+        node_color='lightblue',
         node_size=500,
         font_size=8,
-        width=[G[u][v]['weight'] * 0.5 for u, v in G.edges()]) 
+        width=[G[u][v]['weight'] * 0.5 for u, v in G.edges()])
 
 plt.title("OSRS Market Factor Network (Top 10 Factors)")
+save_fig("factor_network_daily_full")
 plt.show()
 #%%
 G_clean = G.copy()
@@ -537,13 +577,15 @@ for u, v, data in G_clean.edges(data=True):
     else:
         edge_colors_clean.append('crimson')
 G_clean.remove_nodes_from(list(nx.isolates(G_clean)))
-nx.draw(G_clean, pos, 
-        with_labels=True, 
-        edge_color=edge_colors_clean, 
-        node_color='lightblue', 
+plt.figure(figsize=(12, 12))
+nx.draw(G_clean, pos,
+        with_labels=True,
+        edge_color=edge_colors_clean,
+        node_color='lightblue',
         node_size=500,
         font_size=8,
-        width=[G[u][v]['weight'] * 0.5 for u, v in G.edges()]) 
+        width=[G[u][v]['weight'] * 0.5 for u, v in G.edges()])
 plt.title("OSRS Market Factor Network (Top 10 Factors)")
+save_fig("factor_network_daily_clean")
 plt.show()
 #%%
