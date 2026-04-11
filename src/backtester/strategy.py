@@ -14,7 +14,10 @@ class Strategy(ABC):
 
     `next` is called on every bar and must return a dict of
     {item_id: (Signal, quantity)} for each item the strategy wants to act on.
-    Returning an empty dict or omitting an item means HOLD.
+    Quantity must be a strictly positive integer — direction is expressed by
+    the Signal (BUY/SELL), not by the sign of `quantity`. Orders with a
+    non-positive quantity are ignored by the engine. Returning an empty dict
+    or omitting an item means HOLD.
     """
 
     @abstractmethod
@@ -39,6 +42,7 @@ class Strategy(ABC):
 
         Returns
         -------
-        dict mapping item_id -> (Signal, quantity)
+        dict mapping item_id -> (Signal, quantity), where `quantity` is a
+        strictly positive integer.
         """
         ...

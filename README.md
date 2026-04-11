@@ -1,9 +1,9 @@
-# An Analysis of the Runescape Virtual Economy
+# The Runescape Virtual Economy
+
+## Part I: Returns and Market Structure
 
 > _Michael Stavreff,_
 > _December 17, 2025_
-
-## Introduction
 
 Old School Runescape (OSRS) is an online massively multiplayer videogame created released in its current form in February, 2013. The game boasts significant activity, peaking at over 250,000 players[^1] as of this year. Apart from its long-form repetitive "grinding" playstyle which attracts players to log many hours to the game, Runescape's main unique trait is an extremely well developed in-game economy.
 
@@ -187,6 +187,151 @@ Similarly, despite a concentration of principal component variances, we do not o
 | Coal                | -0.1298    |
 
 These results are surprisingly highly interpretable, and confirms the theory that Runescape's market is highly fragmented. Despite this, clear sectors drive the market albeit with small influences. In particular, market activity mainly revolves around skill training, player-versus-player combat, and boss-fighting combat gameplay loops. This is evidenced by factors relating with seed trade (farming skills), boss drops (armor sets and tools), and consumables, likely in support of previously described sectors. Given such clear clustering along with causal reasoning, this motivates strategies involving cointegration, pairs-trading, and a method of short-selling by trading negatively-correlated commodities.
+
+## Part II: Modeling, Forecasting, and Strategy
+
+> _Kiril Ivanov,_
+> _April 11, 2026_
+
+The first half of this paper establishes that Runescape's market is fragmented but heavily structured by predictable cycles, sector clustering, and price-discretization quirks. Part II turns to the corresponding _quantitative_ questions: how predictable is volume, how tightly do mechanism-linked items move together, how much information can statistical and tree-based models extract from a single item's price history, and finally, can any of this be assembled into a (toy) trading system that respects the constraints of the Grand Exchange?
+
+## Volume Forecasting
+
+Given the day/night cyclicality already visible in the ACF plots, the cheapest sensible baseline for volume is a pure seasonal model — no autoregressive lags, no exogenous market state, just sinusoidal harmonics over the day-of-week and hour-of-day calendar:
+
+$$\log V_t \;=\; \beta_0 \;+\; \sum_{k=1}^{4} \!\left[ a_k \sin\!\tfrac{2\pi k h_t}{24} + b_k \cos\!\tfrac{2\pi k h_t}{24} \right] \;+\; \sum_{j=1}^{2} \!\left[ c_j \sin\!\tfrac{2\pi j d_t}{7} + d_j \cos\!\tfrac{2\pi j d_t}{7} \right] \;+\; \gamma\, t \;+\; \varepsilon_t$$
+
+Volume is summed across all items at 5-minute resolution, resampled to hourly, log-transformed (volume is heavily right-skewed), and the model fit by ordinary least squares on the first 80% of the sample with the remaining 20% held out.
+
+![alt text](research/output/volume_seasonal_full.png)
+_Full series fit with the 20% holdout to the right of the dashed line. The seasonal envelope tracks the dominant low-frequency cycle without absorbing the spikes._
+
+![alt text](research/output/volume_seasonal_zoom.png)
+_Ten-day zoom on the holdout. Predicted volume aligns very closely with the observed daily peaks; the absolute amplitude is the only thing the model consistently underestimates on the heaviest activity bursts._
+
+The fit explains the bulk of daily variation despite carrying no information beyond a clock and a calendar. Looking at the average hour-of-day profile makes this even more visible:
+
+![alt text](research/output/volume_seasonal_hour_profile.png)
+_Mean hourly volume by hour-of-day in US/Eastern time. The shaded region is the 11:00–20:00 EST window where US and EU activity overlaps; the bulk of trading volume falls neatly inside it._
+
+Holdout residuals are roughly mean-zero but heavy-tailed — exactly what we expect from an economy where individual content drops, alch loops, or coordinated bot activity occasionally swamp the seasonal baseline:
+
+![alt text](research/output/volume_seasonal_residuals.png)
+_Holdout residuals as a percentage of actual volume. The bulk of error is small and symmetric, with sparse fat-tailed events in both directions corresponding to news-driven activity bursts._
+
+The takeaway is that volume in OSRS is one of the most predictable quantities in the dataset, and almost all of that predictability is calendrical. Anything with predictive power _beyond_ this seasonal baseline therefore carries genuine information about market state, which is what we hand off to the cross-sectional and item-level models that follow.
+
+## Cointegration
+
+The PCA results in Part I provided a soft, statistical justification for sector co-movement. Cointegration offers a stronger statistical handle: instead of asking _do these prices correlate?_, we ask _is there a linear combination of these prices that is stationary?_ — i.e. mean-reverting around a long-run equilibrium even when the individual series themselves are non-stationary random walks. For Runescape the natural candidate groups are _boss drop tables_: sets of items whose only meaningful supply comes from the same source. Demand factors differ across pieces (some armor slots are more popular than others), but the supply is mechanically locked together, which is exactly the kind of mechanism that cointegration is designed to detect.
+
+We ran the Johansen trace test on a series of boss-drop groups: each Barrows brother set, the four God Wars Dungeon bosses, the Dagannoth Kings, Nex, Cerberus, Zulrah, Vorkath, the Moons of Peril, and the three current high-end raids. Hourly resampling smooths the high-frequency noise of sparse trading without distorting longer-run drift, and we use a constant-term specification (`det_order=0`) with a single lagged difference in the underlying VAR.
+
+The Dharok Barrows set offers an especially clean example. The four pieces (helm, platebody, platelegs, greataxe) are uniquely dropped together by Dharok the Wretched, so any sustained spread between them implies a transient demand imbalance rather than a supply divergence:
+
+![alt text](research/output/cointegration_dharok_spread.png)
+_The leading cointegrating spread for the Dharok set, constructed as $s_t = \mathbf{p}_t \cdot \mathbf{v}_1$ where $\mathbf{v}_1$ is the leading eigenvector returned by the Johansen decomposition. The series visibly mean-reverts around a slowly drifting level._
+
+![alt text](research/output/cointegration_dharok_zscore.png)
+_Rolling z-score of the same spread (200-bar window). Crossings of $\pm 2$ are infrequent but reasonably regular and tend to revert within a few days, which is the bridge from "statistical structure" to "tradeable signal" we exploit later in this section._
+
+Across the boss groups tested, several sets exhibited at least one significant cointegrating relation at the 95% level. Crucially — and unlike a generic equity pair found by data-mining — these relationships have a _mechanism_ behind them: the same player kill produces the whole set. That motivates trusting the structure to persist out-of-sample, which is the central worry with naive pairs trading.
+
+## Single-Item Models and Benchmarks
+
+For modelling individual prices we anchor on a single liquid item (id `1603`) and compare several models against a naive random-walk baseline (next-bar prediction = current price). The naive baseline is famously difficult to beat at short horizons on liquid markets, and OSRS is no exception. The four models span very different inductive biases:
+
+- **Random-Forest Time Series (RFTS):** an ensemble of regression trees on engineered lag features (price lags at 1, 6, 8, 10, 12, 30 and 288 bars), rolling means and standard deviations of the target, the item's own volume, a market-wide volatility index, sin/cos day-of-day harmonics, and "hours/days since last update" features.
+- **XGBoost:** the same feature set as RFTS but with gradient-boosted trees, a different regularisation profile, and a more aggressive learning schedule.
+- **Exponential Smoothing (EXPS):** a classical Holt–Winters style smoother carrying no exogenous information; it serves as a low-capacity reference next to the naive baseline.
+- **GARCH(1,1) with Student's-$t$ innovations** for conditional volatility, paired with a 3-state Categorical **Hidden Markov Model** for regime classification of bullish / neutral / bearish observation symbols.
+
+Each tree-based model is trained with a 20% time-ordered holdout and evaluated with rolling cross-validation MAE and MASE (mean absolute scaled error, whose denominator is exactly the naive lag-1 forecast — a model with MASE $\geq 1$ has not beaten the random walk).
+
+### Random Forest
+
+![alt text](research/output/rfts_pred_vs_price_1603.png)
+_RFTS predictions overlaid on the actual price. Outlier bars flagged by an EWM-z-score detector are filled in to make their effect on training visible; the model tracks the price closely and reacts to most regime changes within a few bars, lagging only around the sharpest jumps._
+
+![alt text](research/output/rfts_cv_mae_1603.png)
+_Rolling-CV MAE on the train and test folds. Test error remains close to train error across folds, suggesting the regularisation (depth 5, 400 trees, 20-leaf minimum) is not overfitting._
+
+![alt text](research/output/rfts_residuals_1603.png)
+_RFTS residuals over time. The residual variance is roughly stationary and centred at zero outside of the same outlier bursts the EWM filter already flags._
+
+### XGBoost
+
+![alt text](research/output/xgb_pred_vs_price_1603.png)
+_XGBoost predictions on the same item. Performance is broadly comparable to RFTS — the gradient-boosted model is slightly more responsive on the holdout but at the cost of a noisier residual pattern and a wider train/test gap._
+
+![alt text](research/output/xgb_cv_mae_1603.png)
+_Train vs test CV MAE for XGBoost. The visible gap between train and test is consistent with XGBoost's higher capacity and was the main reason the in-sample MAE drop did not translate cleanly into a lower MASE on the holdout._
+
+### Exponential Smoothing
+
+![alt text](research/output/exps_forecast_1603.png)
+_Exponential smoothing forecast over a 200-bar holdout. With no exogenous features, the model collapses to its trend extrapolation almost immediately and serves as a sanity check: any model that cannot beat this is probably memorising._
+
+### HMM Regime Classification
+
+![alt text](research/output/hmm_states_vs_price_1603.png)
+_Three-state Categorical HMM regime decoding overlaid on the price series. Red, gray, and green shading denote the inferred bearish / neutral / bullish states; transitions visibly cluster around real local extrema._
+
+![alt text](research/output/hmm_transition_matrix_1603.png)![alt text](research/output/hmm_emission_matrix_1603.png)
+_Transition and emission matrices from the fitted HMM. The diagonal-heavy transition matrix confirms that regimes are persistent (the strongest signal in OSRS price data, again, is autocorrelation), and the emission matrix shows each state has a clear directional bias in the observed up/flat/down classification._
+
+![alt text](research/output/hmm_state_occupancy_1603.png)
+_Stationary occupancy of each hidden state. The asymmetry reflects the long, quiet "neutral" periods between the shorter activity bursts that dominate the price history._
+
+### GARCH(1,1)-t
+
+![alt text](research/output/garch_conditional_volatility_1603.png)
+_GARCH(1,1) conditional volatility (yellow) overlaid on the absolute log returns (gray). The conditional-$\sigma$ envelope captures the main volatility clusters cleanly and tightens during quiet periods._
+
+![alt text](research/output/garch_std_residuals_1603.png)
+_Standardised residuals of the GARCH fit. Skew and excess kurtosis remain noticeable even after rescaling, justifying the Student's-$t$ innovation distribution over a Gaussian one — exactly what the heavy-tailed return distributions in Part I anticipated._
+
+![alt text](research/output/garch_density_fan_1603.png)
+_Monte-Carlo density forecast over a 288-bar holdout (one in-game day). Five thousand simulated price paths are summarised by their 5/25/50/75/95% bands. The realised path stays inside the central 50% band for the bulk of the holdout, validating the volatility envelope even though the point forecast itself is essentially flat — exactly what we want a volatility model, and not a directional one, to do._
+
+### Benchmark vs the Naive Model
+
+Both tree-based models reduce MAE versus the naive random walk by a meaningful but modest margin in-sample, with RFTS edging out XGBoost on the holdout once cross-validated (its train/test gap is tighter and its MASE consistently below 1, where XGBoost dips above the boundary on the noisier folds). EXPS, lacking any exogenous information, lands roughly on top of the naive baseline and serves as a floor. The GARCH and HMM models do not produce point forecasts that we score against MAE — they instead deliver well-calibrated _uncertainty_ and _regime_ outputs that are more useful for strategy construction (position sizing, stop placement) than for raw point prediction. The honest summary is that single-item directional forecasting in OSRS does not unlock much edge on its own; the structural and cross-sectional information uncovered in Part I, particularly the cointegration of mechanism-linked groups, is where the actual signal lives.
+
+## A Backtester for OSRS
+
+To translate the cointegration findings into something runnable, we built a small event-driven backtester ([`src/backtester/`](src/backtester/)) tuned to the realities of the Grand Exchange. The design is intentionally minimal:
+
+- A `Backtest` object iterates a price matrix bar-by-bar and asks a `Strategy` for orders on each step.
+- A `Portfolio` tracks cash, open positions, and a trade log; positions are **long-only** (OSRS has no shorting mechanic) and quantities are strictly positive by construction, enforced both in [`engine.py`](src/backtester/engine.py) and at the `Position` dataclass level.
+- Execution can use either the mid-price or the avgHigh/avgLow split for spread-aware fills, and the 1% GE sell-side tax is applied by default.
+- Equity, Sharpe, Sortino, drawdown and a round-trip win rate are reported, along with helper plots for the equity curve, drawdown, and trade markers on individual instruments.
+
+The point of the backtester is not to be a production trading system; it is to give every cointegration / pairs / regime idea explored in this paper a single consistent harness so results are comparable across strategies.
+
+## Pairs Trading the Dharok Spread
+
+The strategy in [`trading/pairs_reversion.py`](trading/pairs_reversion.py) plugs directly into the cointegration findings above. The workflow is:
+
+1. Fit Johansen on the hourly Dharok set and take the leading cointegrating eigenvector $\mathbf{v}_1$.
+2. At each 5-min bar, compute the spread $s_t = \mathbf{p}_t \cdot \mathbf{v}_1$ and its rolling z-score (1-day window). Optionally replace the rolling mean with a Kalman filter local-level state, which lets the equilibrium drift more gracefully under sustained demand imbalances.
+3. When $z < -2$, the positive-weighted _long basket_ (the items with positive eigenvector loadings) is undervalued relative to the equilibrium — buy each leg in proportion to its normalised positive weight, sized to use 90% of equity.
+4. Exit when $z$ reverts above $-0.2$, or stop out at $z < -3.5$.
+
+Because OSRS has no shorting, the strategy only trades the long leg of the basket; the negative-weight legs are dropped from execution and the entry threshold is one-sided rather than the symmetric pairs entry one would use in a venue with two-sided shorting. This is a real handicap — half of the natural trades are mechanically unavailable — but it is the honest constraint of the venue.
+
+![alt text](trading/output/pairs_reversion_spread_zscore.png)
+_Spread z-score with the entry / exit / stop bands marked. Crossings below the green entry line are infrequent but visibly cluster, and most are followed within a few days by a clean reversion through the yellow exit line._
+
+![alt text](trading/output/pairs_reversion_trades.png)
+_Trade markers on the first leg of the basket (Dharok's helm). Buys (green triangles) cluster on the local price troughs that correspond to the negative spread excursions above; sells fire on the subsequent reversion._
+
+![alt text](trading/output/pairs_reversion_equity.png)
+_Equity curve and drawdown for the long-only Dharok pairs strategy on the boss-item dataset, starting from a 10M GP balance. The strategy spends most of its time in cash and only deploys capital when the spread dislocates, so the curve is step-like rather than smooth. Drawdowns are bounded by the hard $z = -3.5$ stop._
+
+The strategy is profitable on this sample but the result should be read with several caveats. First, the entry / exit thresholds are not optimised on a separate validation slice — they are reasonable defaults rather than tuned parameters, deliberately so to avoid overfitting on the small set of trade events the spread actually generates. Second, the long-only restriction kills roughly half the natural opportunity set; without a venue equivalent of short selling we cannot symmetrise the trade count. Third, the GE buy-limit cap (each item resets every 4 hours) is not modelled here, and on a real account it would meaningfully reduce the deployable size for any single trade.
+
+What we _can_ conclude is the more interesting structural point: the ingredients line up. Boss drop tables produce statistically valid cointegrating relations, those relations dislocate often enough to be interesting, the dislocations mean-revert on a tradeable timescale, and the long-only constraint is an annoyance rather than a death sentence. The pairs strategy is a proof-of-concept that the macro-level fragmentation observed in Part I is not an obstacle to local edge — it is precisely _because_ the market is fragmented into mechanism-linked clusters that local statistical structure persists at all.
 
 ## Conclusion
 

@@ -59,6 +59,13 @@ class Position:
     avg_entry:   float
     entry_time:  pd.Timestamp
 
+    def __post_init__(self):
+        if self.quantity <= 0:
+            raise ValueError(
+                f"Position quantity must be strictly positive, got {self.quantity} "
+                f"for item {self.item_id}"
+            )
+
 
 @dataclass
 class Portfolio:
@@ -86,7 +93,10 @@ GE_TAX_RATE = 0.01  # 1% tax on sells
 
 class Backtest:
     """
-    Event-driven backtester that steps through a price matrix bar-by-bar.
+    Event-driven, **long-only** backtester that steps through a price matrix
+    bar-by-bar. Short positions are not supported: a SELL only ever reduces
+    an existing long, and a position's quantity is always strictly positive
+    (enforced by `Position.__post_init__`).
 
     Parameters
     ----------
@@ -147,8 +157,9 @@ class Backtest:
 
     def _execute(self, signal: Signal, item_id: int, qty: int,
                  idx: int, timestamp: pd.Timestamp, portfolio: Portfolio) -> Trade | None:
-        if qty <= 0:
+        if qty is None or qty <= 0:
             return None
+        qty = int(qty)
 
         if signal == Signal.BUY:
             price = self._buy_price(item_id, idx)
@@ -174,6 +185,7 @@ class Backtest:
         elif signal == Signal.SELL:
             held = portfolio.holding(item_id)
             if held <= 0:
+                # Long-only: refuse to open a short.
                 return None
             qty = min(qty, held)
             price = self._sell_price(item_id, idx)
@@ -186,6 +198,7 @@ class Backtest:
             pos.quantity -= qty
             if pos.quantity <= 0:
                 del portfolio.positions[item_id]
+            assert portfolio.holding(item_id) >= 0
 
             trade = Trade(item_id, Signal.SELL, qty, price, timestamp, cost=proceeds)
         else:
