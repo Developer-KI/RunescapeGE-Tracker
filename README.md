@@ -1,4 +1,5 @@
 # The Runescape Virtual Economy
+In depth market analysis, movement forecasting in two articles by and strategy building by Kiril Ivanov and Michael Stavreff
 
 ## Part I: Returns and Market Structure
 
