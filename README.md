@@ -200,7 +200,7 @@ The first half of this paper establishes that Runescape's market is fragmented b
 
 Given the day/night cyclicality already visible in the ACF plots, the cheapest sensible baseline for volume is a pure seasonal model — no autoregressive lags, no exogenous market state, just sinusoidal harmonics over the day-of-week and hour-of-day calendar:
 
-$$\log V_t \;=\; \beta_0 \;+\; \sum_{k=1}^{4} \!\left[ a_k \sin\!\tfrac{2\pi k h_t}{24} + b_k \cos\!\tfrac{2\pi k h_t}{24} \right] \;+\; \sum_{j=1}^{2} \!\left[ c_j \sin\!\tfrac{2\pi j d_t}{7} + d_j \cos\!\tfrac{2\pi j d_t}{7} \right] \;+\; \gamma\, t \;+\; \varepsilon_t$$
+$$\log V_t \=\ \beta_0 \+\ \sum_{k=1}^{4} \!\left[ a_k \sin\!\tfrac{2\pi k h_t}{24} + b_k \cos\!\tfrac{2\pi k h_t}{24} \right] \+\ \sum_{j=1}^{2} \!\left[ c_j \sin\!\tfrac{2\pi j d_t}{7} + d_j \cos\!\tfrac{2\pi j d_t}{7} \right] \+\ \gamma\, t \+\ \varepsilon_t$$
 
 Volume is summed across all items at 5-minute resolution, resampled to hourly, log-transformed (volume is heavily right-skewed), and the model fit by ordinary least squares on the first 80% of the sample with the remaining 20% held out.
 
