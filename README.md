@@ -241,47 +241,13 @@ Across the boss groups tested, several sets exhibited at least one significant c
 
 For modelling individual prices we anchor on a single liquid item (id `1603`) and compare several models against a naive random-walk baseline (next-bar prediction = current price). The naive baseline is famously difficult to beat at short horizons on liquid markets, and OSRS is no exception. The four models span very different inductive biases:
 
-- **Random-Forest Time Series (RFTS):** an ensemble of regression trees on engineered lag features (price lags at 1, 6, 8, 10, 12, 30 and 288 bars), rolling means and standard deviations of the target, the item's own volume, a market-wide volatility index, sin/cos day-of-day harmonics, and "hours/days since last update" features.
-- **XGBoost:** the same feature set as RFTS but with gradient-boosted trees, a different regularisation profile, and a more aggressive learning schedule.
 - **Exponential Smoothing (EXPS):** a classical Holt–Winters style smoother carrying no exogenous information; it serves as a low-capacity reference next to the naive baseline.
 - **GARCH(1,1) with Student's-$t$ innovations** for conditional volatility, paired with a 3-state Categorical **Hidden Markov Model** for regime classification of bullish / neutral / bearish observation symbols.
-
-Each tree-based model is trained with a 20% time-ordered holdout and evaluated with rolling cross-validation MAE and MASE (mean absolute scaled error, whose denominator is exactly the naive lag-1 forecast — a model with MASE $\geq 1$ has not beaten the random walk).
-
-### Random Forest
-
-![alt text](research/output/rfts_pred_vs_price_1603.png)
-_RFTS predictions overlaid on the actual price. Outlier bars flagged by an EWM-z-score detector are filled in to make their effect on training visible; the model tracks the price closely and reacts to most regime changes within a few bars, lagging only around the sharpest jumps._
-
-![alt text](research/output/rfts_cv_mae_1603.png)
-_Rolling-CV MAE on the train and test folds. Test error remains close to train error across folds, suggesting the regularisation (depth 5, 400 trees, 20-leaf minimum) is not overfitting._
-
-![alt text](research/output/rfts_residuals_1603.png)
-_RFTS residuals over time. The residual variance is roughly stationary and centred at zero outside of the same outlier bursts the EWM filter already flags._
-
-### XGBoost
-
-![alt text](research/output/xgb_pred_vs_price_1603.png)
-_XGBoost predictions on the same item. Performance is broadly comparable to RFTS — the gradient-boosted model is slightly more responsive on the holdout but at the cost of a noisier residual pattern and a wider train/test gap._
-
-![alt text](research/output/xgb_cv_mae_1603.png)
-_Train vs test CV MAE for XGBoost. The visible gap between train and test is consistent with XGBoost's higher capacity and was the main reason the in-sample MAE drop did not translate cleanly into a lower MASE on the holdout._
 
 ### Exponential Smoothing
 
 ![alt text](research/output/exps_forecast_1603.png)
 _Exponential smoothing forecast over a 200-bar holdout. With no exogenous features, the model collapses to its trend extrapolation almost immediately and serves as a sanity check: any model that cannot beat this is probably memorising._
-
-### HMM Regime Classification
-
-![alt text](research/output/hmm_states_vs_price_1603.png)
-_Three-state Categorical HMM regime decoding overlaid on the price series. Red, gray, and green shading denote the inferred bearish / neutral / bullish states; transitions visibly cluster around real local extrema._
-
-![alt text](research/output/hmm_transition_matrix_1603.png)![alt text](research/output/hmm_emission_matrix_1603.png)
-_Transition and emission matrices from the fitted HMM. The diagonal-heavy transition matrix confirms that regimes are persistent (the strongest signal in OSRS price data, again, is autocorrelation), and the emission matrix shows each state has a clear directional bias in the observed up/flat/down classification._
-
-![alt text](research/output/hmm_state_occupancy_1603.png)
-_Stationary occupancy of each hidden state. The asymmetry reflects the long, quiet "neutral" periods between the shorter activity bursts that dominate the price history._
 
 ### GARCH(1,1)-t
 
@@ -296,7 +262,7 @@ _Monte-Carlo density forecast over a 288-bar holdout (one in-game day). Five tho
 
 ### Benchmark vs the Naive Model
 
-Both tree-based models reduce MAE versus the naive random walk by a meaningful but modest margin in-sample, with RFTS edging out XGBoost on the holdout once cross-validated (its train/test gap is tighter and its MASE consistently below 1, where XGBoost dips above the boundary on the noisier folds). EXPS, lacking any exogenous information, lands roughly on top of the naive baseline and serves as a floor. The GARCH and HMM models do not produce point forecasts that we score against MAE — they instead deliver well-calibrated _uncertainty_ and _regime_ outputs that are more useful for strategy construction (position sizing, stop placement) than for raw point prediction. The honest summary is that single-item directional forecasting in OSRS does not unlock much edge on its own; the structural and cross-sectional information uncovered in Part I, particularly the cointegration of mechanism-linked groups, is where the actual signal lives.
+EXPS, lacking any exogenous information, lands roughly on top of the naive baseline and serves as a floor. The GARCH model delivers well-calibrated _uncertainty_ and _regime_ outputs that are more useful for strategy construction (position sizing, stop placement) than for raw point prediction. The honest summary is that single-item directional forecasting in OSRS does not unlock much edge on its own; the structural and cross-sectional information uncovered in Part I, particularly the cointegration of mechanism-linked groups, is where the actual signal lives.
 
 ## A Backtester for OSRS
 
